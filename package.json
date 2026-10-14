@@ -1,0 +1,20 @@
+{
+  "name": "the-hunt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "THE HUNT: Three Gates, One Key. A futuristic browser race you can't win by running.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "LOCKOUT_MINUTES=0 DEBUG_SECRET=1 node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "three": "^0.180.0",
+    "ws": "^8.22.0"
+  }
+}

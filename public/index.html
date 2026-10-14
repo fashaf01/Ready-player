@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>THE HUNT</title>
+  <meta name="description" content="Three Gates. One Key." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <!-- Loading -->
+  <div id="loading" class="screen show">
+    <div class="logo">THE&nbsp;HUNT</div>
+    <div class="sub">Three Gates. One Key.</div>
+    <div class="bar"><i></i></div>
+  </div>
+
+  <!-- Login / sign up -->
+  <div id="auth" class="screen">
+    <div class="panel auth-panel">
+      <div class="logo small">THE&nbsp;HUNT</div>
+      <div class="sub">Three Gates. One Key.</div>
+      <div class="tabs">
+        <button data-tab="login" class="on">LOG IN</button>
+        <button data-tab="signup">CREATE ACCOUNT</button>
+      </div>
+      <form id="form-login" class="form on" autocomplete="on">
+        <label>Username<input name="username" autocomplete="username" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="btn primary" type="submit">ENTER</button>
+      </form>
+      <form id="form-signup" class="form" autocomplete="off">
+        <label>Username<input name="username" autocomplete="username" required minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" /></label>
+        <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="6" /></label>
+        <label>Display name<input name="displayName" required minlength="2" maxlength="16" /></label>
+        <div class="label">Avatar color</div>
+        <div class="swatches" id="swatches"></div>
+        <button class="btn primary" type="submit">CREATE AVATAR</button>
+      </form>
+      <div class="err" id="auth-err"></div>
+      <div class="rules">
+        Clear three Gates to win the Final Key.<br />
+        Fail a race and you are locked out for one hour.
+      </div>
+    </div>
+  </div>
+
+  <!-- Gate Hall HUD -->
+  <div id="hud-hall" class="hud">
+    <div class="corner tl">
+      <div class="who"><span class="dot" id="me-dot"></span><span id="me-name"></span></div>
+      <div class="shards" id="me-shards"></div>
+      <div class="meta" id="me-meta"></div>
+    </div>
+    <div class="corner tr">
+      <div class="status" id="lock-status"></div>
+      <div class="meta" id="online"></div>
+    </div>
+    <div class="prompt" id="prompt"></div>
+    <div class="keys">WASD move · Mouse look · E interact · M sound · Esc menu</div>
+  </div>
+
+  <!-- Race HUD -->
+  <div id="hud-race" class="hud">
+    <div class="clock-box">
+      <div class="clock-label">THE CLOCK</div>
+      <div class="clock-time" id="clock-time">00:38.00</div>
+    </div>
+    <div class="progress" id="progress"><div class="ticks"></div><div class="marks" id="marks"></div></div>
+    <div class="runners" id="runner-list"></div>
+    <div class="center-msg" id="center-msg"></div>
+    <div class="sub-msg" id="sub-msg"></div>
+    <div class="dash" id="dash">
+      <div class="dist"><b id="dist">0</b><span> / 400 m</span></div>
+      <div class="speed"><b id="speed">0.0</b><span> m/s</span></div>
+      <div class="stamina"><i id="stamina"></i></div>
+    </div>
+    <div class="keys" id="race-keys">W run · Shift sprint · A/D move · Space jump · S slide · Mouse look</div>
+    <div class="vignette" id="vignette"></div>
+    <div class="speedlines" id="speedlines"></div>
+    <div class="signal-lost" id="signal-lost"><div>SIGNAL LOST</div></div>
+    <div class="lockhint" id="lockhint">CLICK TO CONTROL THE CAMERA</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="screen modal">
+    <div class="panel result-panel">
+      <div class="r-title" id="r-title"></div>
+      <div class="r-sub" id="r-sub"></div>
+      <div class="r-lock" id="r-lock"></div>
+      <div class="r-buttons">
+        <button class="btn" id="r-watch">WATCH LIVE RACES</button>
+        <button class="btn primary" id="r-hall">RETURN TO GATE HALL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live races list -->
+  <div id="races" class="screen modal">
+    <div class="panel races-panel">
+      <div class="r-title small">LIVE RACES</div>
+      <div id="race-list" class="race-list"></div>
+      <div class="r-buttons"><button class="btn" id="races-close">CLOSE</button></div>
+    </div>
+  </div>
+
+  <!-- Menu -->
+  <div id="menu" class="screen modal">
+    <div class="panel menu-panel">
+      <div class="r-title small">MENU</div>
+      <div class="menu-body" id="menu-body"></div>
+      <div class="r-buttons column">
+        <button class="btn primary" id="m-resume">RESUME</button>
+        <button class="btn danger" id="m-leave">LEAVE RACE</button>
+        <button class="btn" id="m-logout">LOG OUT</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="unsupported" class="screen">
+    <div class="panel">
+      <div class="r-title small">DESKTOP ONLY</div>
+      <p>THE HUNT needs a keyboard, a mouse and WebGL. Open it on a computer.</p>
+    </div>
+  </div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
