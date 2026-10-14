@@ -74,6 +74,6 @@ Runs a full race on a real server with scripted players and checks the core rule
 
 ## Hosting
 
-Any Node host that supports WebSockets and a persistent disk works (for example Railway, Fly.io or a small VPS). Set `DATA_DIR` to the persistent disk so accounts survive restarts.
+Any Node host that supports WebSockets and a persistent disk works. The repo is set up for Railway (`railway.json`: start command, `/healthz` health check, restart policy). Attach a volume and set `DATA_DIR` to its mount path (for example `/data`) so accounts and the scoreboard survive redeploys. Run a single instance: races live in the server's memory.
 
 **Keep this repository private.** The server code contains how Gate I is won.

@@ -22,6 +22,7 @@ export function createServer({ dbFile } = {}) {
     next();
   });
 
+  app.get('/healthz', (_req, res) => res.json({ ok: true }));
   app.use('/api', authRouter(db, hub));
   app.use('/shared', express.static(path.join(root, 'shared')));
   app.use('/vendor/three', express.static(path.join(root, 'node_modules/three'), { maxAge: '7d' }));
