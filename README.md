@@ -69,11 +69,17 @@ Runs a full race on a real server with scripted players and checks the core rule
 
 ## How it's built
 
-- `server/` – Express + WebSocket server. Accounts (scrypt-hashed passwords, HTTP-only session cookies), storage in Postgres or SQLite (`server/store/`), race rooms, AI runners, THE CLOCK, the lockout, the scoreboard and all win checks. The server decides who wins; the browser only reports where it is.
+- `server/core/` – The game server, with no platform code: race rooms, AI runners, THE CLOCK, the lockout, the scoreboard, all win checks, and the accounts API (PBKDF2 password hashes, HTTP-only session cookies). The server decides who wins; the browser only reports where it is.
+- `server/` – The Node host: Express + `ws`, storage in Postgres or SQLite (`server/store/`).
+- `cloudflare/` – The Cloudflare host used on Higgsfield: one Durable Object runs the whole game and keeps accounts in its SQLite storage. `scripts/build-higgsfield.sh <app-dir>` assembles it into a Higgsfield game app.
 - `shared/` – Code used by both sides: the seeded course generator, obstacle timing, and runner physics, so the browser and the server agree on every obstacle.
 - `public/` – The game client: Three.js scenes (Gate Hall, race, spectating), procedural neon models, HUD and synthesized sound. No build step.
 
 ## Hosting
+
+**Live:** the game runs on Higgsfield (Cloudflare Workers + a Durable Object), built with `scripts/build-higgsfield.sh`. The test suite can run against it under `wrangler dev`: `HUNT_URL=http://127.0.0.1:8787 npm test`.
+
+### Other hosts
 
 The game needs an always-on Node server (WebSockets and races run in memory), plus a Postgres database for accounts.
 

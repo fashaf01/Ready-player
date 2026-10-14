@@ -13,25 +13,26 @@ import WebSocket from 'ws';
 process.env.LOBBY_WAIT = '2';
 process.env.LOCKOUT_MINUTES = '60';
 
-const { createServer } = await import('../server/index.js');
-
 const { TRACK, SPEED, CLOCK } = await import('../shared/constants.js');
 
-// Runs the whole suite against one storage backend.
-// store: { setup(): Promise<storeOptions>, teardown?(): Promise<void> }
-export function raceSuite(label, store) {
-  let srv;
+// Names get a per-run suffix so the suite can also run against a server that
+// keeps accounts from earlier runs.
+const RUN = Math.random().toString(36).slice(2, 6);
+const nm = (n) => `${n}_${RUN}`;
+
+// Runs the whole suite against one game server.
+// host.start() -> { base, spot(roomId), stop() }
+export function raceSuite(label, host) {
+  let h;
   let base;
 
   before(async () => {
-    srv = await createServer(await store.setup());
-    await new Promise((r) => srv.server.listen(0, r));
-    base = `http://127.0.0.1:${srv.server.address().port}`;
+    h = await host.start();
+    base = h.base;
   });
 
   after(async () => {
-    await srv.close();
-    await store.teardown?.();
+    await h.stop();
   });
 
   async function signup(username) {
@@ -44,7 +45,8 @@ export function raceSuite(label, store) {
     return res.headers.get('set-cookie').split(';')[0];
   }
 
-  async function connect(username) {
+  async function connect(name) {
+    const username = nm(name);
     const cookie = await signup(username);
     const ws = new WebSocket(`${base.replace('http', 'ws')}/ws`, { headers: { cookie } });
     const inbox = [];
@@ -96,7 +98,7 @@ export function raceSuite(label, store) {
   }
 
   test(`[${label}] one race: running loses, the hidden way wins, the rules hold`, { timeout: 120000 }, async () => {
-    const honest = await connect('honest_runner');
+    const honest = await connect('honest');
     const finder = await connect('finder');
     const faller = await connect('faller');
     const cheater = await connect('cheater');
@@ -111,8 +113,7 @@ export function raceSuite(label, store) {
     watcher.send({ t: 'watch', id: room.id });
     await watcher.waitFor((m) => m.t === 'room');
 
-    const serverRoom = srv.hub.rooms.get(room.id);
-    const spot = serverRoom.spot;
+    const spot = await h.spot(room.id);
     const lanes = Object.fromEntries([honest, finder, faller, cheater].map((c, i) => [i, rooms[i].you]));
 
     // Wrong place to go over the side: the other side of the track.
@@ -207,7 +208,7 @@ export function raceSuite(label, store) {
 
     // The watcher never saw the finder's position after they went over the side.
     const end = await watcher.waitFor((m) => m.t === 'end', 70000);
-    assert.deepEqual(end.winners.map((w) => w.n), ['finder']);
+    assert.deepEqual(end.winners.map((w) => w.n), [nm('finder')]);
     const finderLane = lanes[1];
     const states = watcher.inbox.filter((m) => m.t === 'rs');
     assert.ok(states.length > 50);
@@ -224,26 +225,27 @@ export function raceSuite(label, store) {
 
     // Scoreboard lists the clear.
     const board = await (await fetch(`${base}/api/board`)).json();
-    assert.equal(board.clears[0].n, 'finder');
+    assert.ok(board.clears.some((c) => c.n === nm('finder')), 'clear is on the board');
     assert.ok(board.stats.attempts >= 4);
 
     for (const c of [honest, finder, faller, cheater, watcher]) c.ws.close();
   });
 
   test(`[${label}] login, wrong password, logout`, async () => {
-    const cookie = await signup('someone');
+    const someone = nm('someone');
+    const cookie = await signup(someone);
     const me = await (await fetch(`${base}/api/me`, { headers: { cookie } })).json();
-    assert.equal(me.me.name, 'someone');
+    assert.equal(me.me.name, someone);
     const bad = await fetch(`${base}/api/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'someone', password: 'nope' }),
+      body: JSON.stringify({ username: someone, password: 'nope' }),
     });
     assert.equal(bad.status, 401);
     const dup = await fetch(`${base}/api/signup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'SOMEONE', password: 'secret123', displayName: 'x2', color: '#00e5ff' }),
+      body: JSON.stringify({ username: someone.toUpperCase(), password: 'secret123', displayName: 'x2', color: '#00e5ff' }),
     });
     assert.equal(dup.status, 409, 'usernames are case-insensitive');
     await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie } });

@@ -3,13 +3,12 @@
 // report where they are; the server checks those reports against what is
 // physically possible.
 
-import crypto from 'node:crypto';
-import { TRACK, SPEED, CLOCK, ROOM, PHYS, AVATAR_COLORS, clockSchedule, laneX } from '../shared/constants.js';
-import { generateCourse, deckAt, hitTest } from '../shared/course.js';
-import { makeRunner, stepRunner, runnerFlags, FLAG } from '../shared/runner.js';
-import { mulberry32 } from '../shared/rng.js';
+import { TRACK, SPEED, CLOCK, ROOM, PHYS, AVATAR_COLORS, clockSchedule, laneX } from '../../shared/constants.js';
+import { generateCourse, deckAt, hitTest } from '../../shared/course.js';
+import { makeRunner, stepRunner, runnerFlags, FLAG } from '../../shared/runner.js';
+import { mulberry32 } from '../../shared/rng.js';
 import { BOT_NAMES, makeBrain, botInput } from './bots.js';
-import { CONFIG } from './config.js';
+import { randomInt } from './crypto.js';
 
 const TICK = 50; // ms
 const BOT_DT = 0.025; // s
@@ -17,13 +16,13 @@ const PANELS = Math.ceil(TRACK.LENGTH / TRACK.PANEL_LEN);
 const r2 = (v) => Math.round(v * 100) / 100;
 
 function randInt(lo, hi) {
-  return lo + crypto.randomInt(hi - lo + 1);
+  return lo + randomInt(hi - lo + 1);
 }
 
 // Where the hidden spot is this race. Server only.
 function chooseSpot(course) {
   for (let i = 0; i < 200; i++) {
-    const side = crypto.randomInt(2) ? 1 : -1;
+    const side = randomInt(2) ? 1 : -1;
     const panel = randInt(10, 32);
     const z0 = panel * TRACK.PANEL_LEN;
     const z1 = z0 + TRACK.PANEL_LEN;
@@ -62,13 +61,13 @@ export class RaceRoom {
   constructor(hub, id) {
     this.hub = hub;
     this.id = id;
-    this.seed = crypto.randomInt(1, 2 ** 31 - 1);
+    this.seed = 1 + randomInt(2 ** 31 - 2);
     this.course = generateCourse(this.seed);
     this.spot = chooseSpot(this.course);
     this.panels = buildPanels(this.spot);
     this.phase = 'lobby';
     this.createdAt = Date.now();
-    this.lobbyEndsAt = Date.now() + CONFIG.LOBBY_WAIT * 1000;
+    this.lobbyEndsAt = Date.now() + hub.config.LOBBY_WAIT * 1000;
     this.startAt = 0;
     this.endedAt = 0;
     this.clockZ = CLOCK.START_Z;
@@ -79,7 +78,7 @@ export class RaceRoom {
     this.rand = mulberry32(this.seed ^ 0x5bd1e995);
     this.timer = setInterval(() => this.tick(), TICK);
     this.winners = [];
-    if (CONFIG.DEBUG_SECRET) {
+    if (hub.config.DEBUG_SECRET) {
       console.log(`[race ${id}] hidden spot: ${this.spot.side > 0 ? 'left' : 'right'} side, ${this.spot.z0}-${this.spot.z1} m`);
     }
   }
@@ -101,7 +100,7 @@ export class RaceRoom {
   addHuman(client) {
     const free = [];
     for (let i = 0; i < ROOM.MAX_RUNNERS; i++) if (!this.runners[i]) free.push(i);
-    const lane = free[crypto.randomInt(free.length)];
+    const lane = free[randomInt(free.length)];
     this.runners[lane] = {
       lane,
       bot: false,

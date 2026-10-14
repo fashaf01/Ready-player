@@ -11,15 +11,4 @@ export async function openStore({ databaseUrl = CONFIG.DATABASE_URL, sqliteFile 
   return openSqlite(sqliteFile ?? path.join(CONFIG.DATA_DIR, 'hunt.db'));
 }
 
-export function publicProfile(u) {
-  return {
-    id: u.id,
-    username: u.username,
-    name: u.display_name,
-    color: u.color,
-    shards: u.shards,
-    attempts: u.attempts,
-    best: u.best_distance,
-    lockedUntil: u.locked_until,
-  };
-}
+export { publicProfile } from '../core/profile.js';

@@ -1,3 +1,6 @@
+// Node host: Express for the API and static files, `ws` for live play.
+// The game itself lives in server/core and is shared with the Cloudflare host.
+
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -5,15 +8,19 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { CONFIG } from './config.js';
 import { openStore } from './store/index.js';
-import { authRouter, userFromCookie } from './auth.js';
-import { Hub } from './hub.js';
+import { handleApi, userFromCookie } from './core/api.js';
+import { Hub } from './core/hub.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // store options: { databaseUrl } for Postgres, { sqliteFile } for SQLite.
 export async function createServer(storeOptions = {}) {
   const db = await openStore(storeOptions);
-  const hub = new Hub(db);
+  const hub = new Hub(db, {
+    LOCKOUT_MINUTES: CONFIG.LOCKOUT_MINUTES,
+    LOBBY_WAIT: CONFIG.LOBBY_WAIT,
+    DEBUG_SECRET: CONFIG.DEBUG_SECRET,
+  });
   await hub.refreshBoard();
   const app = express();
   app.set('trust proxy', 1);
@@ -25,7 +32,23 @@ export async function createServer(storeOptions = {}) {
   });
 
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
-  app.use('/api', authRouter(db, hub));
+  app.use('/api', express.json({ limit: '4kb' }), async (req, res) => {
+    try {
+      const out = await handleApi(db, hub, {
+        method: req.method,
+        path: req.path,
+        body: req.body,
+        cookie: req.headers.cookie,
+        ip: req.ip,
+        secure: req.secure,
+      });
+      if (out.setCookie) res.setHeader('Set-Cookie', out.setCookie);
+      res.status(out.status).json(out.json);
+    } catch (e) {
+      console.error('[api]', e);
+      res.status(500).json({ error: 'Server error. Try again.' });
+    }
+  });
   app.use('/shared', express.static(path.join(root, 'shared')));
   app.use('/vendor/three', express.static(path.join(root, 'node_modules/three'), { maxAge: '7d' }));
   app.use(express.static(path.join(root, 'public')));

@@ -2,8 +2,8 @@
 // them, with a skill level that decides how often they react in time.
 // They never leave the track.
 
-import { TRACK, laneX } from '../shared/constants.js';
-import { ballState, blockState, crashState, gateHeight, trapState, pistonExt, OBST } from '../shared/course.js';
+import { TRACK, laneX } from '../../shared/constants.js';
+import { ballState, blockState, crashState, gateHeight, trapState, pistonExt, OBST } from '../../shared/course.js';
 
 export const BOT_NAMES = [
   'VECTOR', 'NYX', 'B1T_RUNNER', 'HALCYON', 'ZERO_K', 'PIXELWOLF', 'ORBITAL', 'VANTA',

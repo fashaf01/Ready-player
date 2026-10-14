@@ -1,3 +1,4 @@
 import { raceSuite } from './suite.js';
+import { localHost } from './hosts.js';
 
-raceSuite('sqlite', { setup: async () => ({ sqliteFile: ':memory:' }) });
+raceSuite('sqlite', localHost(async () => ({ sqliteFile: ':memory:' })));

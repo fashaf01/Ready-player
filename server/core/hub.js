@@ -2,8 +2,7 @@
 // watching races.
 
 import { RaceRoom } from './race.js';
-import { publicProfile } from './store/index.js';
-import { CONFIG } from './config.js';
+import { publicProfile } from './profile.js';
 
 const num = (v, lo, hi, d = 0) => {
   const n = Number(v);
@@ -31,9 +30,12 @@ class Client {
   }
 }
 
+const DEFAULTS = { LOCKOUT_MINUTES: 60, LOBBY_WAIT: 20, DEBUG_SECRET: false };
+
 export class Hub {
-  constructor(db) {
+  constructor(db, config = {}) {
     this.db = db;
+    this.config = { ...DEFAULTS, ...config };
     this.clients = new Map();
     this.rooms = new Map();
     this.nextRoomId = 1;
@@ -212,7 +214,7 @@ export class Hub {
   }
 
   lockOut(userId) {
-    const until = Date.now() + CONFIG.LOCKOUT_MINUTES * 60000;
+    const until = Date.now() + this.config.LOCKOUT_MINUTES * 60000;
     this.pendingLocks.set(userId, until);
     this.patchUser(userId, (u) => (u.locked_until = until));
     const attempt = (n) =>
