@@ -57,11 +57,18 @@ export class Hub {
     if (c) fn(c.user);
   }
 
+  get lockoutOn() {
+    return this.config.LOCKOUT_MINUTES > 0;
+  }
+
   withPendingLock(user) {
+    // Lockout switched off: nobody is locked, whatever is stored.
+    if (!this.lockoutOn) return user.locked_until ? { ...user, locked_until: 0 } : user;
     const lock = this.pendingLocks.get(user.id);
     if (lock && lock > user.locked_until) return { ...user, locked_until: lock };
     return user;
   }
+
 
   addAttempt(userId) {
     this.patchUser(userId, (u) => u.attempts++);
@@ -109,7 +116,7 @@ export class Hub {
       if (msg && typeof msg.t === 'string') this.onMessage(client, msg);
     });
     ws.on('close', () => this.disconnect(client));
-    client.send({ t: 'welcome', me: publicProfile(user), now: Date.now() });
+    client.send({ t: 'welcome', me: publicProfile(user), now: Date.now(), lockoutMinutes: this.config.LOCKOUT_MINUTES });
     client.send({ t: 'board', ...this.board, online: this.clients.size });
   }
 
@@ -178,7 +185,7 @@ export class Hub {
   join(c) {
     if (c.room) return;
     const user = c.user;
-    if (user.locked_until > Date.now()) {
+    if (this.lockoutOn && user.locked_until > Date.now()) {
       return c.send({ t: 'error', code: 'locked', until: user.locked_until, msg: 'You are locked out of the race.' });
     }
     this.stopWatching(c);
@@ -214,6 +221,7 @@ export class Hub {
   }
 
   lockOut(userId) {
+    if (!this.lockoutOn) return;
     const until = Date.now() + this.config.LOCKOUT_MINUTES * 60000;
     this.pendingLocks.set(userId, until);
     this.patchUser(userId, (u) => (u.locked_until = until));

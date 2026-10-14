@@ -70,7 +70,8 @@ function sqlAvailable(storage) {
 export function createWorld(ctx, env) {
   const devMode = env.HF_ENV === 'dev';
   const config = {
-    LOCKOUT_MINUTES: num(env.LOCKOUT_MINUTES, 60),
+    // The 1-hour lockout is switched OFF for now (testing). Set to 60 to bring it back.
+    LOCKOUT_MINUTES: num(env.LOCKOUT_MINUTES, 0),
     LOBBY_WAIT: num(env.LOBBY_WAIT, 20),
     // Only ever on for local development; production always runs HF_ENV=production.
     DEBUG_SECRET: devMode && env.DEBUG_SECRET === '1',

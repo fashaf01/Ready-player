@@ -134,8 +134,9 @@ export async function handleApi(store, hub, req) {
 
   if (method === 'GET' && path === '/me') {
     const user = await userFromAuth(store, req);
-    if (!user) return { status: 200, json: { me: null } };
-    return { status: 200, json: { me: profile(user), now: Date.now() } };
+    const lockoutMinutes = hub ? hub.config.LOCKOUT_MINUTES : undefined;
+    if (!user) return { status: 200, json: { me: null, lockoutMinutes } };
+    return { status: 200, json: { me: profile(user), now: Date.now(), lockoutMinutes } };
   }
 
   if (method === 'GET' && path === '/board') {

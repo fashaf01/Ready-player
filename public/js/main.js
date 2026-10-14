@@ -68,7 +68,9 @@ class App {
 
     let me = null;
     try {
-      ({ me } = await api('me'));
+      const res = await api('me');
+      me = res.me;
+      this.setLockoutRule(res.lockoutMinutes);
     } catch {}
     if (me) this.begin(me);
     else this.showAuth();
@@ -132,6 +134,7 @@ class App {
     const n = this.net;
     n.on('welcome', (m) => {
       this.awaitingWelcome = false;
+      this.setLockoutRule(m.lockoutMinutes);
       this.setMe(m.me);
       this.enterHall();
     });
@@ -179,6 +182,13 @@ class App {
       }
       if (this.mode !== 'auth') this.ui.toast('Connection lost · reconnecting…');
     });
+  }
+
+  setLockoutRule(minutes) {
+    if (typeof minutes !== 'number') return;
+    this.lockoutMinutes = minutes;
+    const el = document.getElementById('rule-lock');
+    if (el) el.textContent = minutes > 0 ? 'Fail a race and you are locked out for one hour.' : 'Race as many times as you like.';
   }
 
   setMe(me) {

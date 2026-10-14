@@ -324,7 +324,7 @@ export class RaceScene {
     }
     app.audio.play('derezz');
     app.ui.center('DEREZZED', 'red', 2600);
-    app.ui.sub('Locked out for 1 hour · watching the rest of the race', 6000);
+    app.ui.sub(app.lockoutMinutes > 0 ? 'Locked out for 1 hour · watching the rest of the race' : 'Watching the rest of the race', 6000);
     this.arms.visible = false;
   }
 
