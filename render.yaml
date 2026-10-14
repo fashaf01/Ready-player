@@ -1,0 +1,17 @@
+# Render Blueprint: one free web service in Singapore.
+# Accounts and the Scoreboard live in Postgres (DATABASE_URL, e.g. Neon).
+services:
+  - type: web
+    name: the-hunt
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false

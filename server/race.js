@@ -188,12 +188,11 @@ export class RaceRoom {
       r.z = -1;
       r.y = 0;
       r.lastMsg = Date.now();
-      this.hub.db.addAttempt(r.id);
     }
+    Promise.all(this.humans.map((r) => this.hub.addAttempt(r.id))).then(() => this.hub.boardChanged());
     this.phase = 'countdown';
     this.startAt = Date.now() + ROOM.COUNTDOWN * 1000;
     this.broadcastRoom();
-    this.hub.boardChanged();
   }
 
   // ------------------------------------------------------------------- race
@@ -352,12 +351,10 @@ export class RaceRoom {
     r.finished = true;
     r.done = true;
     r.time = time;
-    const user = this.hub.db.userById(r.id);
-    this.hub.db.setBestDistance(r.id, TRACK.LENGTH);
-    this.hub.db.recordClear(1, user, time);
+    this.hub.setBest(r.id, TRACK.LENGTH);
+    this.hub.recordClear({ id: r.id, display_name: r.name }, time);
     this.winners.push({ n: r.name, time });
     this.hub.sendResult(client, { outcome: 'win', time });
-    this.hub.boardChanged();
   }
 
   playerDead(client, msg) {
@@ -370,7 +367,7 @@ export class RaceRoom {
   failRunner(r, cause, clientOverride) {
     if (r.done) return;
     r.done = true;
-    if (r.maxZ) this.hub.db.setBestDistance(r.id, r.maxZ);
+    if (r.maxZ) this.hub.setBest(r.id, r.maxZ);
     r.dead = cause === 'time' ? null : cause;
     const client = r.client || clientOverride;
     this.hub.lockOut(r.id);

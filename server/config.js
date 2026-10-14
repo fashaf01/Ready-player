@@ -12,4 +12,7 @@ export const CONFIG = {
   // Prints where the secret is for each race to the server log. Testing only.
   DEBUG_SECRET: process.env.DEBUG_SECRET === '1',
   SESSION_DAYS: 30,
+  // Postgres connection string (Neon, Supabase, ...). Empty = local SQLite file.
+  DATABASE_URL: process.env.DATABASE_URL || '',
+  DB_POOL_MAX: num(process.env.DB_POOL_MAX, 5),
 };

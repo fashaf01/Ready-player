@@ -1,12 +1,13 @@
+// Local storage in a single SQLite file. Used when no DATABASE_URL is set
+// (your own machine, tests).
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { CONFIG } from './config.js';
 
-export function openDb(file) {
-  const target = file ?? path.join(CONFIG.DATA_DIR, 'hunt.db');
-  if (target !== ':memory:') fs.mkdirSync(path.dirname(target), { recursive: true });
-  const db = new DatabaseSync(target);
+export function openSqlite(file) {
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS users (
@@ -61,33 +62,50 @@ export function openDb(file) {
     bumpStat: db.prepare(`INSERT INTO stats (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = value + excluded.value`),
     getStat: db.prepare(`SELECT value FROM stats WHERE key = ?`),
   };
+  const plain = (row) => (row ? { ...row } : null);
 
   return {
-    raw: db,
-    createUser({ username, passHash, salt, displayName, color }) {
-      const r = q.insertUser.run(username, passHash, salt, displayName, color, Date.now());
-      return q.userById.get(Number(r.lastInsertRowid));
+    kind: 'sqlite',
+    async createUser({ username, passHash, salt, displayName, color }) {
+      try {
+        const r = q.insertUser.run(username, passHash, salt, displayName, color, Date.now());
+        return plain(q.userById.get(Number(r.lastInsertRowid)));
+      } catch (e) {
+        if (String(e.message).includes('UNIQUE')) throw Object.assign(new Error('taken'), { code: 'TAKEN' });
+        throw e;
+      }
     },
-    userByName: (name) => q.userByName.get(name),
-    userById: (id) => q.userById.get(id),
-    createSession(token, userId) {
+    async userByName(name) {
+      return plain(q.userByName.get(name));
+    },
+    async userById(id) {
+      return plain(q.userById.get(id));
+    },
+    async createSession(token, userId, expiresAt) {
       q.purgeSessions.run(Date.now());
-      q.insertSession.run(token, userId, Date.now() + CONFIG.SESSION_DAYS * 86400000);
+      q.insertSession.run(token, userId, expiresAt);
     },
-    sessionUser: (token) => q.sessionUser.get(token, Date.now()),
-    deleteSession: (token) => q.deleteSession.run(token),
-    setLockedUntil: (id, ts) => q.setLock.run(ts, id),
-    addAttempt(id) {
+    async sessionUser(token) {
+      return plain(q.sessionUser.get(token, Date.now()));
+    },
+    async deleteSession(token) {
+      q.deleteSession.run(token);
+    },
+    async setLockedUntil(id, ts) {
+      q.setLock.run(ts, id);
+    },
+    async addAttempt(id) {
       q.addAttempt.run(id);
       q.bumpStat.run('attempts', 1);
     },
-    setBestDistance: (id, d) => q.setBest.run(d, id),
-    recordClear(gate, user, raceTime) {
-      q.addShard.run(1 << (gate - 1), user.id);
-      const r = q.insertClear.run(gate, user.id, user.display_name, raceTime, Date.now());
-      return r.changes > 0;
+    async setBestDistance(id, d) {
+      q.setBest.run(d, id);
     },
-    board(gate, limit = 20) {
+    async recordClear(gate, user, raceTime) {
+      q.addShard.run(1 << (gate - 1), user.id);
+      return q.insertClear.run(gate, user.id, user.display_name, raceTime, Date.now()).changes > 0;
+    },
+    async board(gate, limit = 20) {
       return {
         clears: q.clears.all(gate, limit).map((c) => ({ n: c.display_name, time: c.race_time, at: c.cleared_at })),
         stats: {
@@ -97,18 +115,8 @@ export function openDb(file) {
         },
       };
     },
-  };
-}
-
-export function publicProfile(u) {
-  return {
-    id: u.id,
-    username: u.username,
-    name: u.display_name,
-    color: u.color,
-    shards: u.shards,
-    attempts: u.attempts,
-    best: u.best_distance,
-    lockedUntil: u.locked_until,
+    async close() {
+      db.close();
+    },
   };
 }

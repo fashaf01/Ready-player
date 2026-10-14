@@ -53,7 +53,8 @@ Never run with `DEBUG_SECRET=1` where players can see the server log.
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `3000` | Web server port |
-| `DATA_DIR` | `./data` | Where the SQLite database (accounts, scoreboard) is stored. Point this at a persistent disk when hosting. |
+| `DATABASE_URL` | empty | Postgres connection string (Neon, Supabase, …). When empty, a local SQLite file is used instead. |
+| `DATA_DIR` | `./data` | Folder for the local SQLite file (only used without `DATABASE_URL`) |
 | `LOCKOUT_MINUTES` | `60` | How long a failed runner waits before racing again |
 | `LOBBY_WAIT` | `20` | Seconds a race waits for more players before AI fills the lanes |
 | `DEBUG_SECRET` | off | `1` prints game-master info to the server log. Testing only. |
@@ -64,16 +65,27 @@ Never run with `DEBUG_SECRET=1` where players can see the server log.
 npm test
 ```
 
-Runs a full race on a real server with scripted players and checks the core rules: a perfect runner still loses to THE CLOCK, speed hacks don't win, the lockout holds, logins work and watchers never see what they shouldn't.
+Runs a full race on a real server with scripted players and checks the core rules: a perfect runner still loses to THE CLOCK, speed hacks don't win, the lockout holds, logins work and watchers never see what they shouldn't. The suite runs twice: on SQLite and on real Postgres (PGlite).
 
 ## How it's built
 
-- `server/` – Express + WebSocket server. Accounts (scrypt-hashed passwords, HTTP-only session cookies), SQLite storage (`node:sqlite`), race rooms, AI runners, THE CLOCK, the lockout, the scoreboard and all win checks. The server decides who wins; the browser only reports where it is.
+- `server/` – Express + WebSocket server. Accounts (scrypt-hashed passwords, HTTP-only session cookies), storage in Postgres or SQLite (`server/store/`), race rooms, AI runners, THE CLOCK, the lockout, the scoreboard and all win checks. The server decides who wins; the browser only reports where it is.
 - `shared/` – Code used by both sides: the seeded course generator, obstacle timing, and runner physics, so the browser and the server agree on every obstacle.
 - `public/` – The game client: Three.js scenes (Gate Hall, race, spectating), procedural neon models, HUD and synthesized sound. No build step.
 
 ## Hosting
 
-Any Node host that supports WebSockets and a persistent disk works. The repo is set up for Railway (`railway.json`: start command, `/healthz` health check, restart policy). Attach a volume and set `DATA_DIR` to its mount path (for example `/data`) so accounts and the scoreboard survive redeploys. Run a single instance: races live in the server's memory.
+The game needs an always-on Node server (WebSockets and races run in memory), plus a Postgres database for accounts.
+
+**Free setup: Render + Neon** (`render.yaml` is included)
+
+1. Create a free database at [neon.tech](https://neon.tech) (region: Singapore) and copy its connection string.
+2. On [render.com](https://render.com): **New → Blueprint**, pick this repository, paste the connection string as `DATABASE_URL`, and deploy.
+
+Render's free plan sleeps after 15 minutes with no players; the next visitor waits about a minute while it wakes up. Accounts and the Scoreboard are safe in Neon.
+
+**Paid alternative: Railway** (`railway.json` is included). Set `DATABASE_URL`, or attach a volume and set `DATA_DIR` to its mount path.
+
+Run a single instance either way: races live in the server's memory.
 
 **Keep this repository private.** The server code contains how Gate I is won.

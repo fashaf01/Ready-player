@@ -2,7 +2,7 @@
 // watching races.
 
 import { RaceRoom } from './race.js';
-import { publicProfile } from './db.js';
+import { publicProfile } from './store/index.js';
 import { CONFIG } from './config.js';
 
 const num = (v, lo, hi, d = 0) => {
@@ -38,15 +38,56 @@ export class Hub {
     this.rooms = new Map();
     this.nextRoomId = 1;
     this.boardTimer = null;
+    this.board = { clears: [], stats: { attempts: 0, clears: 0, players: 0 } };
+    // Lockouts not yet confirmed written, so a quick reconnect can't skip one.
+    this.pendingLocks = new Map();
     this.hallTimer = setInterval(() => this.hallTick(), 160);
   }
 
+  // Database writes happen in the background; the connected player's copy
+  // of their profile is updated right away.
+  write(what, promise) {
+    return promise.catch((e) => console.error(`[db] ${what} failed:`, e.message));
+  }
+
+  patchUser(userId, fn) {
+    const c = this.clients.get(userId);
+    if (c) fn(c.user);
+  }
+
+  withPendingLock(user) {
+    const lock = this.pendingLocks.get(user.id);
+    if (lock && lock > user.locked_until) return { ...user, locked_until: lock };
+    return user;
+  }
+
+  addAttempt(userId) {
+    this.patchUser(userId, (u) => u.attempts++);
+    return this.write('attempt', this.db.addAttempt(userId));
+  }
+
+  setBest(userId, d) {
+    this.patchUser(userId, (u) => (u.best_distance = Math.max(u.best_distance, d)));
+    return this.write('best', this.db.setBestDistance(userId, d));
+  }
+
+  recordClear(user, time) {
+    this.patchUser(user.id, (u) => (u.shards |= 1));
+    return this.write(
+      'clear',
+      this.db.recordClear(1, user, time).then(() => this.boardChanged()),
+    );
+  }
+
   stop() {
+    this.stopped = true;
+    clearTimeout(this.boardTimer);
     clearInterval(this.hallTimer);
     for (const room of this.rooms.values()) clearInterval(room.timer);
   }
 
-  connect(ws, user) {
+  connect(ws, dbUser) {
+    const user = this.withPendingLock(dbUser);
     const old = this.clients.get(user.id);
     if (old) {
       old.send({ t: 'kicked', reason: 'You opened the game somewhere else.' });
@@ -67,7 +108,7 @@ export class Hub {
     });
     ws.on('close', () => this.disconnect(client));
     client.send({ t: 'welcome', me: publicProfile(user), now: Date.now() });
-    client.send({ t: 'board', ...this.db.board(1), online: this.clients.size });
+    client.send({ t: 'board', ...this.board, online: this.clients.size });
   }
 
   rateOk(client) {
@@ -83,11 +124,6 @@ export class Hub {
     if (client.room) client.room.removeHuman(client, 'left');
     this.stopWatching(client);
     if (this.clients.get(client.user.id) === client) this.clients.delete(client.user.id);
-  }
-
-  freshUser(client) {
-    client.user = this.db.userById(client.user.id);
-    return client.user;
   }
 
   onMessage(c, m) {
@@ -126,7 +162,7 @@ export class Hub {
         c.mode = 'hall';
         return;
       case 'me':
-        return c.send({ t: 'me', me: publicProfile(this.freshUser(c)), now: Date.now() });
+        return c.send({ t: 'me', me: publicProfile(c.user), now: Date.now() });
     }
   }
 
@@ -134,12 +170,12 @@ export class Hub {
     if (c.room) c.room.removeHuman(c, 'left');
     this.stopWatching(c);
     c.mode = 'hall';
-    c.send({ t: 'me', me: publicProfile(this.freshUser(c)), now: Date.now() });
+    c.send({ t: 'me', me: publicProfile(c.user), now: Date.now() });
   }
 
   join(c) {
     if (c.room) return;
-    const user = this.freshUser(c);
+    const user = c.user;
     if (user.locked_until > Date.now()) {
       return c.send({ t: 'error', code: 'locked', until: user.locked_until, msg: 'You are locked out of the race.' });
     }
@@ -177,19 +213,39 @@ export class Hub {
 
   lockOut(userId) {
     const until = Date.now() + CONFIG.LOCKOUT_MINUTES * 60000;
-    this.db.setLockedUntil(userId, until);
+    this.pendingLocks.set(userId, until);
+    this.patchUser(userId, (u) => (u.locked_until = until));
+    const attempt = (n) =>
+      this.db.setLockedUntil(userId, until).then(
+        () => {
+          if (this.pendingLocks.get(userId) === until) this.pendingLocks.delete(userId);
+        },
+        (e) => {
+          if (n < 3) setTimeout(() => attempt(n + 1), 2000 * (n + 1));
+          else console.error('[db] lockout failed:', e.message);
+        },
+      );
+    attempt(0);
   }
 
   sendResult(client, res) {
-    const user = this.freshUser(client);
-    client.send({ t: 'result', ...res, me: publicProfile(user), now: Date.now() });
+    client.send({ t: 'result', ...res, me: publicProfile(client.user), now: Date.now() });
+  }
+
+  async refreshBoard() {
+    try {
+      this.board = await this.db.board(1);
+    } catch (e) {
+      console.error('[db] board failed:', e.message);
+    }
   }
 
   boardChanged() {
-    if (this.boardTimer) return;
-    this.boardTimer = setTimeout(() => {
+    if (this.boardTimer || this.stopped) return;
+    this.boardTimer = setTimeout(async () => {
       this.boardTimer = null;
-      const msg = JSON.stringify({ t: 'board', ...this.db.board(1), online: this.clients.size });
+      await this.refreshBoard();
+      const msg = JSON.stringify({ t: 'board', ...this.board, online: this.clients.size });
       for (const c of this.clients.values()) c.sendRaw(msg);
     }, 300);
   }
