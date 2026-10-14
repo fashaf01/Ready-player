@@ -88,6 +88,7 @@ export function createWorld(ctx, env) {
         method: request.method,
         path,
         body,
+        contentType: request.headers.get('Content-Type') || '',
         cookie: request.headers.get('Cookie') || '',
         ip: request.headers.get('CF-Connecting-IP') || 'local',
         secure: url.protocol === 'https:',

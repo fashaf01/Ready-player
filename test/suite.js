@@ -248,7 +248,9 @@ export function raceSuite(label, host) {
       body: JSON.stringify({ username: someone.toUpperCase(), password: 'secret123', displayName: 'x2', color: '#00e5ff' }),
     });
     assert.equal(dup.status, 409, 'usernames are case-insensitive');
-    await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie } });
+    const formPost = await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie, 'content-type': 'text/plain' }, body: '{}' });
+    assert.equal(formPost.status, 415, 'non-JSON posts are refused');
+    await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' });
     const after = await (await fetch(`${base}/api/me`, { headers: { cookie } })).json();
     assert.equal(after.me, null);
   });

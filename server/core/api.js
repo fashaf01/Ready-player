@@ -1,7 +1,7 @@
 // The HTTP API (accounts and the Scoreboard), written without any web
 // framework so the Node server and the Cloudflare Worker can share it.
 //
-// handleApi(store, hub, req) with req = { method, path, body, cookie, ip, secure }
+// handleApi(store, hub, req) with req = { method, path, body, contentType, cookie, ip, secure }
 // returns { status, json, setCookie? }.
 
 import { AVATAR_COLORS } from '../../shared/constants.js';
@@ -28,8 +28,13 @@ export async function userFromCookie(store, cookieHeader) {
   return token ? store.sessionUser(await sha256Hex(token)) : null;
 }
 
+// Over HTTPS the cookie also works when the game is shown inside another
+// site's frame (Higgsfield embeds games). Cross-site requests still can't use
+// it: the API only takes JSON (needs a CORS preflight we never grant) and
+// sockets check the Origin header.
 function sessionCookie(token, maxAgeSec, secure) {
-  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSec}${secure ? '; Secure' : ''}`;
+  const base = `${COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}`;
+  return secure ? `${base}; Secure; SameSite=None; Partitioned` : `${base}; SameSite=Lax`;
 }
 
 async function startSession(store, user, secure) {
@@ -64,6 +69,8 @@ function cleanDisplayName(s) {
 
 export async function handleApi(store, hub, req) {
   const { method, path, secure } = req;
+  // Only JSON posts: a plain cross-site form can't send this content type.
+  if (method === 'POST' && !/^application\/json\b/i.test(req.contentType || '')) return err(415, 'Send JSON.');
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const profile = (u) => publicProfile(hub ? hub.withPendingLock(u) : u);
 

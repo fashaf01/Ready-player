@@ -38,6 +38,7 @@ export async function createServer(storeOptions = {}) {
         method: req.method,
         path: req.path,
         body: req.body,
+        contentType: req.headers['content-type'],
         cookie: req.headers.cookie,
         ip: req.ip,
         secure: req.secure,
