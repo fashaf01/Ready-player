@@ -7,8 +7,9 @@
 // storage and survive that.
 
 import { Hub } from '../server/core/hub.js';
-import { handleApi, userFromCookie } from '../server/core/api.js';
+import { handleApi, userFromAuth, WS_PROTOCOL } from '../server/core/api.js';
 import { openDoStore } from './store-do.js';
+import { openKvStore } from './store-kv.js';
 
 const num = (v, d) => (v === undefined || v === '' || Number.isNaN(Number(v)) ? d : Number(v));
 const MAX_MESSAGE = 8 * 1024;
@@ -56,6 +57,16 @@ function adapt(ws) {
   };
 }
 
+// SQLite-backed objects have ctx.storage.sql; older key-value ones do not.
+function sqlAvailable(storage) {
+  try {
+    storage.sql.exec('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createWorld(ctx, env) {
   const devMode = env.HF_ENV === 'dev';
   const config = {
@@ -64,7 +75,8 @@ export function createWorld(ctx, env) {
     // Only ever on for local development; production always runs HF_ENV=production.
     DEBUG_SECRET: devMode && env.DEBUG_SECRET === '1',
   };
-  const db = openDoStore(ctx.storage.sql);
+  const db = sqlAvailable(ctx.storage) && env.FORCE_KV !== '1' ? openDoStore(ctx.storage.sql) : openKvStore(ctx.storage);
+  console.log(`[world] storage: ${db.kind}`);
   const hub = new Hub(db, config);
   ctx.blockConcurrencyWhile(() => hub.refreshBoard());
 
@@ -90,6 +102,7 @@ export function createWorld(ctx, env) {
         body,
         contentType: request.headers.get('Content-Type') || '',
         cookie: request.headers.get('Cookie') || '',
+        huntToken: request.headers.get('X-Hunt-Token') || '',
         ip: request.headers.get('CF-Connecting-IP') || 'local',
         secure: url.protocol === 'https:',
       });
@@ -111,13 +124,15 @@ export function createWorld(ctx, env) {
       } catch {}
       if (host !== url.host) return new Response('forbidden', { status: 403 });
     }
-    const user = await userFromCookie(db, request.headers.get('Cookie') || '');
+    const protocols = request.headers.get('Sec-WebSocket-Protocol') || '';
+    const user = await userFromAuth(db, { cookie: request.headers.get('Cookie') || '', protocols });
     if (!user) return new Response('unauthorized', { status: 401 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
     hub.connect(adapt(server), user);
-    return new Response(null, { status: 101, webSocket: client });
+    const headers = protocols.split(',').map((s) => s.trim()).includes(WS_PROTOCOL) ? { 'Sec-WebSocket-Protocol': WS_PROTOCOL } : {};
+    return new Response(null, { status: 101, webSocket: client, headers });
   }
 
   return {

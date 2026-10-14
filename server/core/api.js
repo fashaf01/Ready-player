@@ -1,7 +1,7 @@
 // The HTTP API (accounts and the Scoreboard), written without any web
 // framework so the Node server and the Cloudflare Worker can share it.
 //
-// handleApi(store, hub, req) with req = { method, path, body, contentType, cookie, ip, secure }
+// handleApi(store, hub, req) with req = { method, path, body, contentType, cookie, huntToken, ip, secure }
 // returns { status, json, setCookie? }.
 
 import { AVATAR_COLORS } from '../../shared/constants.js';
@@ -23,9 +23,30 @@ export function parseCookies(header = '') {
   return out;
 }
 
-export async function userFromCookie(store, cookieHeader) {
-  const token = parseCookies(cookieHeader)[COOKIE];
+const TOKEN_RE = /^[0-9a-f]{64}$/;
+
+// The session token can arrive three ways: the cookie, an X-Hunt-Token
+// header, or (for sockets) the WebSocket subprotocol list ["hunt", token].
+// Hosts that drop cookies still work.
+export function tokenFrom({ cookie, huntToken, protocols } = {}) {
+  const fromCookie = parseCookies(cookie)[COOKIE];
+  if (fromCookie && TOKEN_RE.test(fromCookie)) return fromCookie;
+  const header = String(huntToken || '').trim().toLowerCase();
+  if (TOKEN_RE.test(header)) return header;
+  const list = String(protocols || '').split(',').map((s) => s.trim());
+  if (list.includes(WS_PROTOCOL)) return list.find((s) => TOKEN_RE.test(s)) || null;
+  return null;
+}
+
+export const WS_PROTOCOL = 'hunt';
+
+export async function userFromAuth(store, auth) {
+  const token = tokenFrom(auth);
   return token ? store.sessionUser(await sha256Hex(token)) : null;
+}
+
+export function userFromCookie(store, cookieHeader) {
+  return userFromAuth(store, { cookie: cookieHeader });
 }
 
 // Over HTTPS the cookie also works when the game is shown inside another
@@ -40,7 +61,7 @@ function sessionCookie(token, maxAgeSec, secure) {
 async function startSession(store, user, secure) {
   const token = randomHex(32);
   await store.createSession(await sha256Hex(token), user.id, Date.now() + SESSION_DAYS * 86400000);
-  return sessionCookie(token, SESSION_DAYS * 86400, secure);
+  return { token, setCookie: sessionCookie(token, SESSION_DAYS * 86400, secure) };
 }
 
 // Small in-memory limiter for login/signup attempts per IP.
@@ -90,9 +111,9 @@ export async function handleApi(store, hub, req) {
       if (e.code === 'TAKEN') return err(409, 'That username is taken.');
       throw e;
     }
-    const setCookie = await startSession(store, user, secure);
+    const { token, setCookie } = await startSession(store, user, secure);
     hub?.boardChanged();
-    return { status: 200, json: { me: publicProfile(user) }, setCookie };
+    return { status: 200, json: { me: publicProfile(user), token }, setCookie };
   }
 
   if (method === 'POST' && path === '/login') {
@@ -101,18 +122,18 @@ export async function handleApi(store, hub, req) {
     const user = typeof username === 'string' && USERNAME_RE.test(username) ? await store.userByName(username) : null;
     const ok = user && typeof password === 'string' && (await checkPassword(password, user.salt, user.pass_hash));
     if (!ok) return err(401, 'Wrong username or password.');
-    const setCookie = await startSession(store, user, secure);
-    return { status: 200, json: { me: profile(user) }, setCookie };
+    const { token, setCookie } = await startSession(store, user, secure);
+    return { status: 200, json: { me: profile(user), token }, setCookie };
   }
 
   if (method === 'POST' && path === '/logout') {
-    const token = parseCookies(req.cookie)[COOKIE];
+    const token = tokenFrom(req);
     if (token) await store.deleteSession(await sha256Hex(token));
     return { status: 200, json: { ok: true }, setCookie: sessionCookie('', 0, secure) };
   }
 
   if (method === 'GET' && path === '/me') {
-    const user = await userFromCookie(store, req.cookie);
+    const user = await userFromAuth(store, req);
     if (!user) return { status: 200, json: { me: null } };
     return { status: 200, json: { me: profile(user), now: Date.now() } };
   }

@@ -8,7 +8,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { CONFIG } from './config.js';
 import { openStore } from './store/index.js';
-import { handleApi, userFromCookie } from './core/api.js';
+import { handleApi, userFromAuth, WS_PROTOCOL } from './core/api.js';
 import { Hub } from './core/hub.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +40,7 @@ export async function createServer(storeOptions = {}) {
         body: req.body,
         contentType: req.headers['content-type'],
         cookie: req.headers.cookie,
+        huntToken: req.headers['x-hunt-token'],
         ip: req.ip,
         secure: req.secure,
       });
@@ -55,7 +56,11 @@ export async function createServer(storeOptions = {}) {
   app.use(express.static(path.join(root, 'public')));
 
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 });
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: 8 * 1024,
+    handleProtocols: (protocols) => (protocols.has(WS_PROTOCOL) ? WS_PROTOCOL : false),
+  });
 
   server.on('upgrade', async (req, socket, head) => {
     if (!req.url.startsWith('/ws')) return socket.destroy();
@@ -73,7 +78,7 @@ export async function createServer(storeOptions = {}) {
     }
     let user = null;
     try {
-      user = await userFromCookie(db, req.headers.cookie);
+      user = await userFromAuth(db, { cookie: req.headers.cookie, protocols: req.headers['sec-websocket-protocol'] });
     } catch (e) {
       console.error('[ws] session lookup failed:', e.message);
     }

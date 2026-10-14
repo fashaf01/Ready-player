@@ -1,5 +1,23 @@
 // WebSocket connection to the game server, with clock sync.
 
+// The session token is kept here as well as in the cookie, because some
+// hosts (and embedded frames) drop cookies. It goes out as an X-Hunt-Token
+// header on API calls and as a WebSocket subprotocol on the live connection.
+const TOKEN_KEY = 'hunt_token';
+export function getToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setToken(t) {
+  try {
+    if (t) localStorage.setItem(TOKEN_KEY, t);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {}
+}
+
 export class Net {
   constructor() {
     this.ws = null;
@@ -28,7 +46,8 @@ export class Net {
   connect() {
     this.closedByUs = false;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const token = getToken();
+    const ws = token ? new WebSocket(`${proto}://${location.host}/ws`, ['hunt', token]) : new WebSocket(`${proto}://${location.host}/ws`);
     this.ws = ws;
     ws.onopen = () => {
       this.connected = true;
@@ -89,16 +108,25 @@ export class Net {
 }
 
 export async function api(path, body) {
-  const res = await fetch(`/api/${path}`, {
-    method: body ? 'POST' : 'GET',
-    headers: body ? { 'content-type': 'application/json' } : {},
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
-  });
-  let data = {};
+  const headers = body ? { 'content-type': 'application/json' } : {};
+  const token = getToken();
+  if (token) headers['x-hunt-token'] = token;
+  let res;
+  try {
+    res = await fetch(`/api/${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('Could not reach the game server. Check your connection and try again.');
+  }
+  let data = null;
   try {
     data = await res.json();
   } catch {}
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok || !data) throw new Error(data?.error || `The game server answered with an error (${res.status}). Please try again.`);
+  if (data.token) setToken(data.token);
   return data;
 }

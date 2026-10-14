@@ -231,6 +231,38 @@ export function raceSuite(label, host) {
     for (const c of [honest, finder, faller, cheater, watcher]) c.ws.close();
   });
 
+  test(`[${label}] works without cookies (token header + socket protocol)`, async () => {
+    const name = nm('nocookie');
+    const res = await fetch(`${base}/api/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: name, password: 'secret123', displayName: name, color: '#00e5ff' }),
+    });
+    const { token } = await res.json();
+    assert.match(token, /^[0-9a-f]{64}$/);
+    const me = await (await fetch(`${base}/api/me`, { headers: { 'x-hunt-token': token } })).json();
+    assert.equal(me.me.name, name);
+    const ws = new WebSocket(`${base.replace('http', 'ws')}/ws`, ['hunt', token]);
+    const welcome = await new Promise((resolve, reject) => {
+      ws.on('message', (d) => {
+        const m = JSON.parse(d);
+        if (m.t === 'welcome') resolve(m);
+      });
+      ws.on('error', reject);
+      setTimeout(() => reject(new Error('no welcome')), 10000).unref();
+    });
+    assert.equal(welcome.me.name, name);
+    assert.equal(ws.protocol, 'hunt');
+    ws.close();
+    const bad = new WebSocket(`${base.replace('http', 'ws')}/ws`, ['hunt', 'f'.repeat(64)]);
+    const status = await new Promise((resolve) => {
+      bad.on('unexpected-response', (_req, r) => resolve(r.statusCode));
+      bad.on('open', () => resolve(101));
+      bad.on('error', () => resolve('error'));
+    });
+    assert.equal(status, 401, 'unknown token is refused');
+  });
+
   test(`[${label}] login, wrong password, logout`, async () => {
     const someone = nm('someone');
     const cookie = await signup(someone);

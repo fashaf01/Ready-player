@@ -5,7 +5,7 @@ import { TrackView } from './gfx/track.js';
 import { Fx } from './gfx/fx.js';
 import { HallScene, fmtLeft } from './scenes/hall.js';
 import { RaceScene } from './scenes/race.js';
-import { Net, api } from './net.js';
+import { Net, api, setToken } from './net.js';
 import { Input } from './input.js';
 import { Audio } from './audio.js';
 import { UI } from './ui.js';
@@ -109,6 +109,7 @@ class App {
     try {
       await api('logout', {});
     } catch {}
+    setToken(null);
     this.net.close();
     location.reload();
   }
@@ -120,6 +121,8 @@ class App {
     this.ui.setMe(me);
     this.hall.setMe(me);
     this.audio.unlock();
+    this.awaitingWelcome = true;
+    this.connectFails = 0;
     this.net.connect();
   }
 
@@ -128,6 +131,7 @@ class App {
   wireNet() {
     const n = this.net;
     n.on('welcome', (m) => {
+      this.awaitingWelcome = false;
       this.setMe(m.me);
       this.enterHall();
     });
@@ -165,6 +169,14 @@ class App {
     n.on('kicked', (m) => this.ui.toast(m.reason, 8000));
     n.on('close', (e) => {
       if (e.code === 4002) return;
+      // Never got in: don't leave the player staring at an empty screen.
+      if (this.awaitingWelcome && ++this.connectFails >= 2) {
+        this.awaitingWelcome = false;
+        this.net.close();
+        this.showAuth();
+        this.ui.authError('Could not connect to the live game. Please log in again.');
+        return;
+      }
       if (this.mode !== 'auth') this.ui.toast('Connection lost · reconnecting…');
     });
   }

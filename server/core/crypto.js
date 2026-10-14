@@ -26,7 +26,8 @@ export async function sha256Hex(text) {
   return toHex(await subtle.digest('SHA-256', enc.encode(text)));
 }
 
-const PBKDF2_ITER = 120000;
+// Cloudflare Workers refuse more than 100,000 PBKDF2 iterations.
+const PBKDF2_ITER = 100000;
 
 // Stored as "pbkdf2$<iterations>$<hex>" so the cost can be raised later.
 export async function hashPassword(password, salt, iterations = PBKDF2_ITER) {

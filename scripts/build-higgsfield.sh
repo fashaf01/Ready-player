@@ -13,7 +13,7 @@ APP="$(cd "$1" && pwd)"
 rm -rf "$APP/src/cloudflare" "$APP/src/server" "$APP/src/shared" \
   "$APP/src/logic.js" "$APP/src/logic.d.ts" "$APP/src/protocol.ts" "$APP/tests"
 mkdir -p "$APP/src/cloudflare" "$APP/src/server/core" "$APP/src/shared"
-cp "$ROOT"/cloudflare/world.js "$ROOT"/cloudflare/world.d.ts "$ROOT"/cloudflare/store-do.js "$APP/src/cloudflare/"
+cp "$ROOT"/cloudflare/world.js "$ROOT"/cloudflare/world.d.ts "$ROOT"/cloudflare/store-do.js "$ROOT"/cloudflare/store-kv.js "$APP/src/cloudflare/"
 cp "$ROOT"/cloudflare/room.ts "$ROOT"/cloudflare/worker.ts "$APP/src/"
 cp "$ROOT"/server/core/*.js "$APP/src/server/core/"
 cp "$ROOT"/shared/*.js "$APP/src/shared/"
