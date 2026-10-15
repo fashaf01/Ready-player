@@ -1,44 +1,74 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { PaintPipeline } from './paint.js';
 
 export function createRenderer(container) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // No MSAA: the paint pipeline renders into its own targets and the ink
+  // pass draws the edges anyway.
+  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(innerWidth, innerHeight);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  // Tone mapping and colour space happen in the paint pipeline's grade pass.
+  renderer.toneMapping = THREE.NoToneMapping;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05010f);
-  scene.fog = new THREE.FogExp2(0x12052c, 0.0042);
+  scene.background = new THREE.Color(0x0a0320);
+  scene.fog = new THREE.FogExp2(0x2a0c46, 0.0036);
 
   const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 4000);
-
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.62, 0.45, 0.32);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  const paint = new PaintPipeline(renderer, scene, camera);
 
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-    composer.setSize(innerWidth, innerHeight);
-    bloom.setSize(innerWidth / 2, innerHeight / 2);
+    paint.setSize(innerWidth, innerHeight);
   });
 
-  const hemi = new THREE.HemisphereLight(0x8a6cff, 0x1a0630, 1.4);
+  // Anime lighting: a cool violet fill, and one warm key light from the
+  // sunset that the toon materials split into hard light/shadow bands.
+  const hemi = new THREE.HemisphereLight(0x7a5cff, 0x2a0838, 1.1);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffc6f0, 0.9);
-  sun.position.set(-40, 80, 120);
+  const sun = new THREE.DirectionalLight(0xffb59a, 1.7);
+  sun.position.set(-60, 70, -50);
   scene.add(sun);
 
-  return { renderer, scene, camera, composer, bloom };
+  return { renderer, scene, camera, paint };
+}
+
+// Three hard light bands for cel shading.
+const TOON_RAMP = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([46, 120, 205, 255]), 4, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+})();
+
+// Shared rim light: a hard anime edge highlight on curved surfaces.
+const RIM = { color: { value: new THREE.Color(1.0, 0.42, 0.85) }, strength: { value: 0.55 } };
+
+function addRim(shader) {
+  shader.uniforms.rimColor = RIM.color;
+  shader.uniforms.rimStrength = RIM.strength;
+  shader.fragmentShader = shader.fragmentShader
+    .replace('void main() {', 'uniform vec3 rimColor;\nuniform float rimStrength;\nvoid main() {')
+    .replace(
+      '#include <opaque_fragment>',
+      `float rimF = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      outgoingLight += rimColor * smoothstep(0.62, 0.7, rimF) * rimStrength * diffuseColor.rgb * 2.5;
+      #include <opaque_fragment>`,
+    );
+}
+
+// Cel-shaded material. Accepts (and ignores) PBR-only options so old call
+// sites keep working.
+export function toon(opts = {}) {
+  const { metalness, roughness, ...rest } = opts;
+  const m = new THREE.MeshToonMaterial({ gradientMap: TOON_RAMP, ...rest });
+  m.onBeforeCompile = addRim;
+  m.customProgramCacheKey = () => 'toon-rim';
+  return m;
 }
 
 const neonCache = new Map();
@@ -56,7 +86,7 @@ export function neon(color, boost = 1.6, opts = {}) {
 }
 
 export function metal(color = 0x12142a, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.38, ...opts });
+  return toon({ color, ...opts });
 }
 
 export function canvasTex(w, h, draw) {

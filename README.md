@@ -1,6 +1,6 @@
 # THE HUNT
 
-**Three Gates. One Key.** A futuristic 3D browser game inspired by *Ready Player One*.
+**Three Gates. One Key.** A futuristic 3D browser game inspired by *Ready Player One*, drawn like a cyberpunk anime oil painting: cel-shaded models, a painted sunset sky, ink outlines and brush-stroke post-processing.
 
 Players create an avatar, walk the **Gate Hall** in third person and try to clear three Gates. Each Gate gives a key shard. All three shards unlock the **Final Key**. Version 1 has Gate I playable; Gates II and III are sealed.
 
@@ -8,9 +8,10 @@ Players create an avatar, walk the **Gate Hall** in third person and try to clea
 
 - A 400 m neon hoverway floating above a megacity, 10 runners (real players, with AI runners filling empty lanes).
 - Third person at the start line; the camera drops into **first person automatically** when the countdown runs out.
+- In the lobby, press **Enter** when ready. When every player in the lobby is ready, the race starts in 3 seconds instead of waiting out the timer.
 - **THE CLOCK** runs the 400 m in 38 seconds. If it crosses the line first, everyone loses: *TIME WINS*.
 - Obstacles: rolling energy balls, falling blocks, laser gates, shock and spike floors, pistons and road that cracks and falls away.
-- Fail a race (knocked out, beaten by THE CLOCK, or leaving) and your account is **locked out of racing for one hour**. You can still watch live races.
+- Fail a race (knocked out, beaten by THE CLOCK, or leaving) and your account is **locked out of racing for one hour**. You can still watch live races. (The lockout is a setting, `LOCKOUT_MINUTES`; with it off, press **R** to go straight into the next race.)
 - The first players to beat THE CLOCK go on the Scoreboard in the Gate Hall.
 
 There are no hints in the game.
@@ -26,7 +27,10 @@ There are no hints in the game.
 | S / ↓ | Slide |
 | Mouse | Look around (click the game to capture the mouse) |
 | E | Interact (Gate Hall) |
+| Enter | Ready up (race lobby) |
+| R | Race again (results screen, or after being knocked out when the lockout is off) |
 | M | Sound on / off |
+| P | Paint quality: high → medium → low (the game also lowers it by itself on slow machines) |
 | Esc | Menu |
 
 Desktop browsers only (keyboard, mouse and WebGL).

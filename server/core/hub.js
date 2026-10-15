@@ -152,6 +152,8 @@ export class Hub {
         return;
       case 'lp':
         return c.room?.lobbyPos(c, m);
+      case 'ready':
+        return c.room?.setReady(c, m.on !== false);
       case 'st':
         return c.room?.playerState(c, m);
       case 'edge':

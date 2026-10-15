@@ -1,8 +1,8 @@
-// The world around everything: sky, synth sun, stars, the megacity far
+// The world around everything: painted sky and sun, stars, the megacity far
 // below, flying traffic, giant holo rings and floating billboards.
 
 import * as THREE from 'three';
-import { canvasTex, neon, textPlane, rand } from './common.js';
+import { canvasTex, neon, textPlane, rand, toon } from './common.js';
 
 export class Environment {
   constructor(scene) {
@@ -16,60 +16,84 @@ export class Environment {
   }
 
   buildSky() {
+    // A painted anime sunset: violet zenith, hot pink horizon, a striped sun
+    // at the far end of the track and cel-shaded clouds lit from below.
     const sky = new THREE.Mesh(
-      new THREE.SphereGeometry(3000, 32, 16),
+      new THREE.SphereGeometry(3000, 48, 24),
       new THREE.ShaderMaterial({
         side: THREE.BackSide,
         depthWrite: false,
         fog: false,
-        uniforms: {},
+        uniforms: { uT: { value: 0 } },
         vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-        fragmentShader: `varying vec3 vP;
+        fragmentShader: `varying vec3 vP; uniform float uT;
+          float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float noise(vec2 p){
+            vec2 i = floor(p), f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+          }
+          float fbm(vec2 p){
+            float s = 0.0, a = 0.5;
+            for (int i = 0; i < 5; i++) { s += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+            return s;
+          }
           void main(){
-            float h = vP.y;
-            vec3 top = vec3(0.012,0.004,0.05);
-            vec3 mid = vec3(0.09,0.02,0.22);
-            vec3 hor = vec3(0.55,0.06,0.42);
-            vec3 low = vec3(0.04,0.01,0.10);
-            vec3 c = h > 0.0 ? mix(mid, top, smoothstep(0.0,0.6,h)) : mix(mid, low, smoothstep(0.0,0.3,-h));
-            c = mix(c, hor, exp(-abs(h)*14.0)*0.9);
-            gl_FragColor = vec4(c,1.0);
+            vec3 d = normalize(vP);
+            float h = d.y;
+            vec3 sunDir = normalize(vec3(0.0, 0.06, 1.0));
+            float sd = max(dot(d, sunDir), 0.0);
+
+            vec3 zen = vec3(0.03, 0.012, 0.11);
+            vec3 mid = vec3(0.17, 0.04, 0.34);
+            vec3 hor = vec3(1.05, 0.26, 0.46);
+            vec3 low = vec3(0.06, 0.012, 0.14);
+            vec3 c = h > 0.0 ? mix(mid, zen, smoothstep(0.0, 0.55, h)) : mix(mid, low, smoothstep(0.0, 0.22, -h));
+            c = mix(c, hor, exp(-abs(h) * 8.0) * (0.35 + 0.65 * pow(sd, 3.0)));
+            c += vec3(1.0, 0.42, 0.22) * pow(sd, 30.0) * 0.45 + vec3(0.9, 0.25, 0.5) * pow(sd, 6.0) * 0.22;
+
+            // Sun disc: warm top, pink bottom, the lower half sliced by bands.
+            float R = 0.15;
+            float disc = smoothstep(cos(R) - 0.0006, cos(R), sd);
+            float yy = (h - sunDir.y) / R;
+            vec3 sunCol = mix(vec3(1.25, 0.18, 0.55), vec3(1.55, 1.05, 0.4), smoothstep(-0.9, 0.8, yy));
+            float bands = yy < 0.15 ? step(0.38 + (0.15 - yy) * 0.25, fract(yy * 6.0 - uT * 0.12)) : 1.0;
+            c = mix(c, sunCol, disc * bands);
+
+            // Painted clouds on a layer above the city, flattened into 3 cel tones.
+            if (h > -0.03) {
+              vec2 uv = d.xz / (h + 0.12) * 0.9 + vec2(uT * 0.004, 0.0);
+              float n = fbm(uv);
+              float cover = smoothstep(0.5, 0.62, n) * smoothstep(-0.03, 0.05, h) * (1.0 - smoothstep(0.25, 0.7, h));
+              float lit = fbm(uv - normalize(sunDir.xz + vec2(0.0001)) * 0.12) - n;
+              float tone = floor(clamp(0.5 - lit * 7.0, 0.0, 1.0) * 3.0) / 2.0;
+              float nearSun = pow(sd, 4.0);
+              vec3 shade = vec3(0.16, 0.05, 0.3);
+              vec3 midC = vec3(0.6, 0.15, 0.5);
+              vec3 rim = mix(vec3(1.1, 0.42, 0.62), vec3(1.9, 0.95, 0.55), nearSun);
+              vec3 cc = tone < 0.25 ? shade : tone < 0.75 ? midC : rim;
+              // Thin bright edge where the cloud meets the sky.
+              cc = mix(cc, rim * 1.1, smoothstep(0.5, 0.53, n) * (1.0 - smoothstep(0.53, 0.56, n)) * 0.8);
+              c = mix(c, cc, cover * 0.92);
+            }
+
+            // Long painted streaks across the horizon.
+            float streak = smoothstep(0.55, 0.9, noise(vec2(atan(d.x, d.z) * 3.0, h * 90.0))) * exp(-abs(h - 0.1) * 18.0);
+            c += vec3(1.0, 0.45, 0.6) * streak * 0.18;
+            gl_FragColor = vec4(c, 1.0);
           }`,
       }),
     );
     sky.renderOrder = -10;
+    this.sky = sky;
     this.group.add(sky);
 
-    // Synth sun at the far end of the track.
-    const sun = new THREE.Mesh(
-      new THREE.CircleGeometry(420, 64),
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        fog: false,
-        uniforms: { uT: { value: 0 } },
-        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-        fragmentShader: `varying vec2 vUv; uniform float uT;
-          void main(){
-            float y = vUv.y;
-            vec3 c = mix(vec3(0.75,0.05,0.42), vec3(0.95,0.6,0.12), smoothstep(0.1,0.9,y));
-            float band = step(0.45, fract(y*16.0 - uT*0.3));
-            float cut = y < 0.72 ? mix(band, 1.0, smoothstep(0.3, 0.72, y)) : 1.0;
-            gl_FragColor = vec4(c, cut * 0.95);
-          }`,
-      }),
-    );
-    sun.position.set(0, 150, 2600);
-    sun.rotation.y = Math.PI;
-    this.sun = sun;
-    this.group.add(sun);
-
-    // Stars
-    const n = 1800;
+    // Stars (big enough to survive the paint filter).
+    const n = 1400;
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       const th = Math.random() * Math.PI * 2;
-      const ph = Math.acos(rand(0.05, 1));
+      const ph = Math.acos(rand(0.3, 1));
       const r = 2800;
       pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
       pos[i * 3 + 1] = r * Math.cos(ph);
@@ -77,7 +101,7 @@ export class Environment {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85 }));
+    const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffe6ff, size: 2.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 }));
     this.group.add(stars);
   }
 
@@ -98,7 +122,7 @@ export class Environment {
       g.globalAlpha = 1;
     });
     windows.wrapS = windows.wrapT = THREE.RepeatWrapping;
-    const mat = new THREE.MeshStandardMaterial({ color: 0x090a18, metalness: 0.6, roughness: 0.5, emissive: 0xffffff, emissiveMap: windows, emissiveIntensity: 1.4 });
+    const mat = toon({ color: 0x1c1440, emissive: 0xffffff, emissiveMap: windows, emissiveIntensity: 1.4 });
     const geo = new THREE.BoxGeometry(1, 1, 1);
     geo.translate(0, 0.5, 0);
     const count = 1100;
@@ -212,7 +236,7 @@ export class Environment {
   update(dt) {
     this.time += dt;
     const t = this.time;
-    this.sun.material.uniforms.uT.value = t;
+    this.sky.material.uniforms.uT.value = t;
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
     const q = new THREE.Quaternion();

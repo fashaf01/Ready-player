@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { TRACK } from '/shared/constants.js';
 import { OBST, ballState, blockState, gateHeight, trapState, pistonExt, crashState } from '/shared/course.js';
-import { neon, metal, canvasTex, textPlane, disposeTree, rand } from './common.js';
+import { neon, metal, toon, canvasTex, textPlane, disposeTree, rand } from './common.js';
 
 const { HALF_W, EDGE_X, LANE_W, LENGTH, PANEL_LEN, RAIL_H, DECK_T } = TRACK;
 const PANELS = Math.ceil(LENGTH / PANEL_LEN);
@@ -88,7 +88,7 @@ function deckPiece(x0, x1, z0, z1) {
     uv.setXY(i, (wx + HALF_W) / LANE_W, wz / 8);
   }
   const tex = getLaneTex();
-  const topMesh = new THREE.Mesh(top, new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.85, metalness: 0.15, roughness: 0.75 }));
+  const topMesh = new THREE.Mesh(top, toon({ map: tex, color: 0x6a6488, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.75 }));
   topMesh.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
   g.add(topMesh);
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, DECK_T, l), metal(0x0a0a18));
@@ -138,7 +138,7 @@ export class TrackView {
     });
     plazaTex.wrapS = plazaTex.wrapT = THREE.RepeatWrapping;
     plazaTex.repeat.set(4, 6);
-    const plaza = new THREE.Mesh(new THREE.BoxGeometry(24, DECK_T, 35), new THREE.MeshStandardMaterial({ map: plazaTex, emissive: 0xffffff, emissiveMap: plazaTex, emissiveIntensity: 0.7, metalness: 0.5, roughness: 0.4 }));
+    const plaza = new THREE.Mesh(new THREE.BoxGeometry(24, DECK_T, 35), toon({ map: plazaTex, color: 0x4a4468, emissive: 0xffffff, emissiveMap: plazaTex, emissiveIntensity: 0.5 }));
     plaza.position.set(0, -DECK_T / 2, TRACK.PLAZA_START + 17.5);
     S.add(plaza);
     for (const sx of [-1, 1]) {
@@ -454,7 +454,7 @@ export class TrackView {
       grp.add(warn);
       const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 0.35, 0.35), metal(0x8890b8));
       grp.add(arm);
-      const headMat = new THREE.MeshStandardMaterial({ map: getHazardTex(), emissive: 0xffffff, emissiveMap: getHazardTex(), emissiveIntensity: 0.6 });
+      const headMat = toon({ map: getHazardTex(), emissive: 0xffffff, emissiveMap: getHazardTex(), emissiveIntensity: 0.6 });
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, OBST.PISTON_DEPTH), headMat);
       head.position.y = 0.95;
       grp.add(head);
@@ -562,7 +562,7 @@ export class TrackView {
     });
     grate.wrapS = grate.wrapT = THREE.RepeatWrapping;
     grate.repeat.set(w / 2, len / 2);
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(w, len), new THREE.MeshStandardMaterial({ map: grate, emissive: 0xffffff, emissiveMap: grate, emissiveIntensity: 0.6 }));
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(w, len), toon({ map: grate, color: 0x6a6488, emissive: 0xffffff, emissiveMap: grate, emissiveIntensity: 0.6 }));
     top.rotation.x = -Math.PI / 2;
     top.position.set(cx, L.y + 0.01, cz);
     g.add(top);

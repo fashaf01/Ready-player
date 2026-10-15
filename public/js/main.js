@@ -31,11 +31,18 @@ class App {
     }
     await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 2500))]);
 
-    const { renderer, scene, camera, composer } = createRenderer($('stage'));
+    const { renderer, scene, camera, paint } = createRenderer($('stage'));
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    this.composer = composer;
+    this.paint = paint;
+    try {
+      const q = localStorage.getItem('hunt_paint');
+      if (q === 'high' || q === 'medium' || q === 'low') {
+        paint.setQuality(q);
+        paint.fps.checks = 99; // the player chose; don't auto-adjust
+      }
+    } catch {}
     scene.add(camera);
 
     this.net = new Net();
@@ -167,6 +174,7 @@ class App {
       if (m.code === 'locked') {
         this.ui.toast(`Locked out · next attempt in ${fmtLeft(m.until - this.net.now())}`);
         this.audio.play('deny');
+        if (this.mode === 'race') this.enterHall();
       } else this.ui.toast(m.msg || 'Something went wrong.');
     });
     n.on('kicked', (m) => this.ui.toast(m.reason, 8000));
@@ -213,6 +221,19 @@ class App {
   toHall() {
     this.net.send({ t: 'hall' });
     this.enterHall();
+  }
+
+  // Straight back into a new race from the results screen.
+  raceAgain() {
+    if (this.me && this.me.lockedUntil > this.net.now()) {
+      this.ui.toast(`Locked out · next attempt in ${fmtLeft(this.me.lockedUntil - this.net.now())}`);
+      this.audio.play('deny');
+      return;
+    }
+    this.audio.play('ui');
+    this.ui.hide('results');
+    this.net.send({ t: 'hall' });
+    this.net.send({ t: 'join' });
   }
 
   enterRace(room, mode) {
@@ -318,6 +339,17 @@ class App {
         else if (!this.input.locked && !this.anyModal()) this.openMenu();
       }
       if (e.code === 'KeyM') this.ui.toast(this.audio.toggleMute() ? 'Sound off' : 'Sound on', 1200);
+      if (e.code === 'KeyP') {
+        const q = this.paint.cycleQuality();
+        try {
+          localStorage.setItem('hunt_paint', q);
+        } catch {}
+        this.ui.toast(`Paint quality: ${q}`, 1400);
+      }
+      if (e.code === 'KeyR' && !this.menuOpen) {
+        const deadInRace = this.mode === 'race' && this.race.mode === 'play' && this.race.status === 'dead' && !(this.lockoutMinutes > 0);
+        if (this.ui.isOpen('results') || deadInRace) this.raceAgain();
+      }
     });
     addEventListener('pointerdown', () => this.audio.unlock());
   }
@@ -337,7 +369,7 @@ class App {
     }
     this.fx.update(dt);
     this.input.endFrame();
-    this.composer.render();
+    this.paint.render(dt);
   }
 }
 

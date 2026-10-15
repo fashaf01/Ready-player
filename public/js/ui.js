@@ -21,6 +21,7 @@ export class UI {
       this.hide('results');
       app.toHall();
     };
+    $('r-again').onclick = () => app.raceAgain();
     $('r-watch').onclick = () => {
       this.hide('results');
       app.openRaces();
@@ -121,6 +122,7 @@ export class UI {
     if (this.isOpen('results') && this.resultsMe) {
       const l2 = this.resultsMe.lockedUntil - this.app.net.now();
       $('r-lock').textContent = l2 > 0 ? `LOCKED OUT · NEXT ATTEMPT IN ${fmtLeft(l2)}` : '';
+      $('r-again').disabled = l2 > 0;
     }
   }
 
@@ -248,6 +250,7 @@ export class UI {
     this.resultsMe = me;
     $('r-lock').textContent = '';
     $('r-watch').style.display = '';
+    $('r-again').textContent = watchMode ? 'RACE NOW (R)' : 'RACE AGAIN (R)';
     this.show('results');
     this.updateLock();
     this.app.releaseMouse();

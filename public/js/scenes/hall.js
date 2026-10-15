@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { Avatar } from '../gfx/avatar.js';
-import { neon, metal, canvasTex, textPlane, damp, clamp } from '../gfx/common.js';
+import { neon, metal, toon, canvasTex, textPlane, damp, clamp } from '../gfx/common.js';
 
 const RADIUS = 27;
 const GATES = [
@@ -76,7 +76,7 @@ export class HallScene {
     floorTex.repeat.set(5, 5);
     const floor = new THREE.Mesh(new THREE.CylinderGeometry(RADIUS, RADIUS - 3, 1.2, 96), [
       metal(0x0d0b20),
-      new THREE.MeshStandardMaterial({ map: floorTex, emissive: 0xffffff, emissiveMap: floorTex, emissiveIntensity: 0.8, metalness: 0.6, roughness: 0.3 }),
+      toon({ map: floorTex, color: 0x6a6488, emissive: 0xffffff, emissiveMap: floorTex, emissiveIntensity: 0.8 }),
       metal(0x0d0b20),
     ]);
     floor.position.y = -0.6;

@@ -10,7 +10,7 @@
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <script type="importmap">
     {
@@ -27,6 +27,7 @@
   <!-- Loading -->
   <div id="loading" class="screen show">
     <div class="logo">THE&nbsp;HUNT</div>
+    <div class="kana">ザ・ハント ／ 三つの門</div>
     <div class="sub">Three Gates. One Key.</div>
     <div class="bar"><i></i></div>
   </div>
@@ -35,6 +36,7 @@
   <div id="auth" class="screen">
     <div class="panel auth-panel">
       <div class="logo small">THE&nbsp;HUNT</div>
+      <div class="kana">ザ・ハント</div>
       <div class="sub">Three Gates. One Key.</div>
       <div class="tabs">
         <button data-tab="login" class="on">LOG IN</button>
@@ -73,7 +75,7 @@
       <div class="meta" id="online"></div>
     </div>
     <div class="prompt" id="prompt"></div>
-    <div class="keys">WASD move · Mouse look · E interact · M sound · Esc menu</div>
+    <div class="keys">WASD move · Mouse look · E interact · M sound · P paint quality · Esc menu</div>
   </div>
 
   <!-- Race HUD -->
@@ -105,8 +107,9 @@
       <div class="r-sub" id="r-sub"></div>
       <div class="r-lock" id="r-lock"></div>
       <div class="r-buttons">
+        <button class="btn primary" id="r-again">RACE AGAIN (R)</button>
         <button class="btn" id="r-watch">WATCH LIVE RACES</button>
-        <button class="btn primary" id="r-hall">RETURN TO GATE HALL</button>
+        <button class="btn" id="r-hall">GATE HALL</button>
       </div>
     </div>
   </div>

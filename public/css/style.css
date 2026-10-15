@@ -10,6 +10,10 @@
   --muted: #8fa3c7;
   --hud: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
   --body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --anime: 'Dela Gothic One', 'Orbitron', 'Segoe UI', sans-serif;
+  --ink: #14061f;
+  --peach: #ff8a6a;
+  --violet: #8a5cff;
 }
 
 * { box-sizing: border-box; }
@@ -184,11 +188,131 @@ input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0, 229, 255, 
 .menu-body td:first-child { color: var(--text); font-family: var(--hud); font-size: 12px; letter-spacing: 0.1em; width: 45%; }
 
 #toast {
-  position: fixed; top: 22px; left: 50%; transform: translate(-50%, -140%); z-index: 50; transition: transform 0.25s;
+  position: fixed; top: 22px; left: 50%; transform: translate(-50%, -220%); z-index: 50; transition: transform 0.25s;
   font-family: var(--hud); font-size: 14px; letter-spacing: 0.12em; padding: 12px 20px; background: var(--panel); border: 1px solid var(--line);
 }
 #toast.show { transform: translate(-50%, 0); }
 #unsupported p { color: var(--muted); }
+
+/* ------------------------------------------------------------------
+   Anime skin: manga panels, ink outlines, hard offset shadows, screentone.
+   ------------------------------------------------------------------ */
+.logo {
+  font-family: var(--anime);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #fff7dc 0%, #ffc07a 34%, #ff3fa4 68%, var(--violet) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 2px var(--ink);
+  filter: drop-shadow(6px 6px 0 rgba(0, 229, 255, 0.85)) drop-shadow(0 0 26px rgba(255, 63, 164, 0.5));
+  transform: skewX(-7deg);
+}
+.logo.small { font-size: 50px; }
+.kana { font-family: var(--anime); color: var(--magenta); text-align: center; letter-spacing: 0.45em; font-size: 14px; margin-top: 6px; text-shadow: 2px 2px 0 var(--ink); }
+.sub { letter-spacing: 0.32em; }
+
+#loading { background: radial-gradient(ellipse at 50% 125%, #ff5fa2 0%, #8a2bd0 30%, #2a0c46 58%, #0a0320 85%); }
+#loading .bar { height: 6px; border: 2px solid var(--ink); background: rgba(20, 6, 31, 0.7); transform: skewX(-20deg); }
+#loading .bar i { background: linear-gradient(90deg, var(--magenta), var(--gold)); box-shadow: none; }
+
+.modal {
+  background:
+    radial-gradient(ellipse at center, rgba(20, 4, 40, 0.25) 0%, rgba(8, 0, 20, 0.82) 75%),
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0deg 4deg, rgba(255, 210, 240, 0.07) 4deg 4.6deg);
+  backdrop-filter: blur(2px) saturate(1.2);
+}
+
+.panel {
+  position: relative;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.6px) 0 0 / 6px 6px,
+    linear-gradient(160deg, rgba(40, 14, 76, 0.95) 0%, rgba(14, 5, 34, 0.95) 70%);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  clip-path: none;
+  box-shadow:
+    0 0 0 1px rgba(255, 150, 210, 0.55),
+    9px 9px 0 rgba(255, 43, 214, 0.55),
+    0 0 60px rgba(138, 92, 255, 0.35);
+}
+.panel::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 18px;
+  width: 90px;
+  height: 5px;
+  background: linear-gradient(90deg, var(--gold), var(--peach));
+  border: 2px solid var(--ink);
+  transform: skewX(-30deg);
+}
+
+.tabs button { font-family: var(--anime); font-weight: 400; letter-spacing: 0.08em; transform: skewX(-8deg); border: 2px solid rgba(255, 255, 255, 0.12); }
+.tabs button.on { color: var(--ink); background: linear-gradient(100deg, var(--cyan), #9af6ff); border-color: var(--ink); box-shadow: 3px 3px 0 var(--magenta); }
+input { border: 2px solid rgba(255, 255, 255, 0.14); background: rgba(10, 2, 24, 0.6); }
+input:focus { border-color: var(--magenta); box-shadow: 3px 3px 0 rgba(255, 43, 214, 0.5); }
+.swatches button { border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink), 0 0 10px currentColor; }
+
+.btn {
+  font-family: var(--anime);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  transform: skewX(-8deg);
+  border: 2px solid var(--ink);
+  background: rgba(46, 18, 92, 0.92);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.6), 4px 4px 0 rgba(0, 229, 255, 0.5);
+  transition: transform 0.08s, box-shadow 0.08s, background 0.15s;
+}
+.btn:hover { background: rgba(70, 28, 130, 0.95); transform: skewX(-8deg) translate(-1px, -1px); box-shadow: 0 0 0 1px var(--cyan), 6px 6px 0 rgba(0, 229, 255, 0.65); }
+.btn:active { transform: skewX(-8deg) translate(3px, 3px); box-shadow: 0 0 0 1px var(--cyan), 1px 1px 0 rgba(0, 229, 255, 0.65); }
+.btn.primary { color: var(--ink); background: linear-gradient(100deg, #ff3fa4 0%, var(--peach) 55%, var(--gold) 100%); box-shadow: 0 0 0 1px #ffd3ea, 5px 5px 0 rgba(138, 92, 255, 0.95); }
+.btn.primary:hover { background: linear-gradient(100deg, #ff5fb4 0%, #ff9d80 55%, #ffe066 100%); box-shadow: 0 0 0 1px #fff, 7px 7px 0 rgba(138, 92, 255, 1); }
+.btn.danger { background: rgba(120, 10, 40, 0.9); box-shadow: 0 0 0 1px rgba(255, 51, 85, 0.8), 4px 4px 0 rgba(255, 51, 85, 0.5); }
+.btn:disabled { transform: skewX(-8deg); }
+
+.status, .prompt, .lockhint, #toast {
+  border: 2px solid var(--ink);
+  background: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1.6px) 0 0 / 5px 5px, rgba(24, 8, 48, 0.88);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.5), 5px 5px 0 rgba(255, 43, 214, 0.5);
+}
+.prompt { font-family: var(--anime); letter-spacing: 0.06em; }
+.prompt b { color: var(--gold); }
+.who { font-family: var(--anime); font-weight: 400; text-shadow: 2px 2px 0 var(--ink), 0 0 12px rgba(255, 63, 164, 0.6); }
+.keys { color: rgba(255, 230, 245, 0.6); text-shadow: 1px 1px 0 var(--ink); }
+
+.clock-label { font-family: var(--anime); letter-spacing: 0.3em; text-shadow: 2px 2px 0 var(--ink); }
+.clock-label::after { content: ' ・ 時計'; color: var(--magenta); }
+.clock-time { -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 rgba(255, 43, 214, 0.85), 0 0 22px rgba(255, 207, 51, 0.7); }
+.clock-time.urgent { text-shadow: 4px 4px 0 rgba(120, 0, 30, 0.9), 0 0 22px rgba(255, 80, 50, 0.9); }
+.progress { height: 8px; border: 2px solid var(--ink); background: rgba(20, 6, 31, 0.7); transform: skewX(-20deg); box-shadow: 3px 3px 0 rgba(255, 43, 214, 0.45); }
+.runners div { background: linear-gradient(90deg, rgba(24, 8, 48, 0.85), rgba(24, 8, 48, 0.35)); border-left-width: 5px; transform: skewX(-8deg); margin-bottom: 3px; }
+.runners div span:last-child { font-family: var(--anime); letter-spacing: 0.04em; }
+
+.center-msg {
+  font-family: var(--anime);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: #fff;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 7px 7px 0 var(--magenta), 0 0 50px rgba(0, 229, 255, 0.7);
+  transform: skewX(-8deg) scale(0.86);
+  transition: opacity 0.18s, transform 0.3s cubic-bezier(0.2, 1.7, 0.4, 1);
+}
+.center-msg.show { transform: skewX(-8deg) scale(1); }
+.center-msg.red { color: #ffe3e8; text-shadow: 7px 7px 0 #b0102c, 0 0 50px rgba(255, 51, 85, 0.85); }
+.center-msg.gold { color: #fff6cf; text-shadow: 7px 7px 0 #ff6a00, 0 0 60px rgba(255, 207, 51, 0.9); }
+.sub-msg { font-family: var(--anime); font-size: 16px; letter-spacing: 0.08em; text-shadow: 2px 2px 0 var(--ink), 0 0 12px rgba(0, 0, 0, 0.8); }
+.dash .dist b, .dash .speed b { -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 rgba(255, 43, 214, 0.7); }
+.stamina { height: 8px; border: 2px solid var(--ink); transform: skewX(-20deg); }
+.signal-lost div { font-family: var(--anime); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 #b0102c, 0 0 30px var(--red); }
+
+.r-title { font-family: var(--anime); font-weight: 400; letter-spacing: 0.03em; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--magenta), 0 0 26px rgba(0, 229, 255, 0.6); transform: skewX(-6deg); }
+.r-title.red { color: #ffe3e8; text-shadow: 5px 5px 0 #b0102c, 0 0 26px rgba(255, 51, 85, 0.7); }
+.r-title.gold { color: #fff6cf; text-shadow: 5px 5px 0 #ff6a00, 0 0 30px rgba(255, 207, 51, 0.8); }
+.race-list .row { border: 2px solid var(--ink); background: rgba(40, 14, 76, 0.6); box-shadow: 3px 3px 0 rgba(0, 229, 255, 0.3); }
+.race-list .row .info b, .menu-body td:first-child { font-family: var(--anime); font-weight: 400; letter-spacing: 0.05em; }
 
 @media (max-width: 720px) {
   .runners { display: none; }

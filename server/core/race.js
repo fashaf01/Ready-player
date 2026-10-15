@@ -12,6 +12,7 @@ import { randomInt } from './crypto.js';
 
 const TICK = 50; // ms
 const BOT_DT = 0.025; // s
+const READY_GRACE = 3; // s from "everyone ready" to the countdown
 const PANELS = Math.ceil(TRACK.LENGTH / TRACK.PANEL_LEN);
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -156,6 +157,18 @@ export class RaceRoom {
     r.z = Math.max(TRACK.PLAZA_START + 1, Math.min(-2, Number(msg.z) || -10));
     r.ry = Number(msg.ry) || 0;
     r.moving = !!msg.m;
+  }
+
+  // Everyone in the lobby says ready → start soon instead of waiting it out.
+  setReady(client, on) {
+    const r = this.runners[client.lane];
+    if (!r || r.client !== client || this.phase !== 'lobby') return;
+    r.ready = !!on;
+    const humans = this.humans;
+    if (humans.length && humans.every((h) => h.ready)) {
+      this.lobbyEndsAt = Math.min(this.lobbyEndsAt, Date.now() + READY_GRACE * 1000);
+    }
+    this._lobbyTick = 2; // send the new state on the next tick
   }
 
   startCountdown() {
@@ -428,7 +441,7 @@ export class RaceRoom {
     const msg = {
       t: 'lobby',
       endsAt: this.lobbyEndsAt,
-      p: this.humans.map((r) => [r.lane, r2(r.x), r2(r.z), r2(r.ry || 0), r.moving ? 1 : 0]),
+      p: this.humans.map((r) => [r.lane, r2(r.x), r2(r.z), r2(r.ry || 0), r.moving ? 1 : 0, r.ready ? 1 : 0]),
     };
     this.sendAll(msg);
   }

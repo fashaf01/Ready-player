@@ -7,7 +7,7 @@ import { TRACK, CLOCK, PHYS, laneX, clockSchedule } from '/shared/constants.js';
 import { generateCourse } from '/shared/course.js';
 import { makeRunner, stepRunner, runnerFlags, FLAG } from '/shared/runner.js';
 import { Avatar } from '../gfx/avatar.js';
-import { textPlane, neon, damp, clamp, lerp } from '../gfx/common.js';
+import { textPlane, neon, toon, damp, clamp, lerp } from '../gfx/common.js';
 import { esc } from '../ui.js';
 
 const STEP = 1 / 120;
@@ -39,7 +39,7 @@ export class RaceScene {
     const armGeo = new THREE.CapsuleGeometry(0.05, 0.32, 4, 8);
     for (const sx of [-1, 1]) {
       const a = new THREE.Group();
-      const m = new THREE.Mesh(armGeo, new THREE.MeshStandardMaterial({ color: 0x1a1d33, metalness: 0.4, roughness: 0.5 }));
+      const m = new THREE.Mesh(armGeo, toon({ color: 0x1a1d33, metalness: 0.4, roughness: 0.5 }));
       m.rotation.x = Math.PI / 2;
       a.add(m);
       const band = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.018, 0.105), neon('#00e5ff', 0.9, { unique: true }));
@@ -74,6 +74,8 @@ export class RaceScene {
     this.status = room.phase === 'lobby' ? 'lobby' : room.phase === 'done' ? 'over' : room.phase;
     this.R = null;
     this.myLane = room.you;
+    this.myReady = false;
+    this.readyLanes = new Set();
     this.yaw = 0;
     this.pitch = -0.04;
     this.camBlend = 0;
@@ -186,8 +188,13 @@ export class RaceScene {
   onLobby(msg) {
     this.room.lobbyEndsAt = msg.endsAt;
     const seen = new Set();
-    for (const [lane, x, z, ry, m] of msg.p) {
-      if (this.mode === 'play' && lane === this.myLane) continue;
+    this.readyLanes = new Set();
+    for (const [lane, x, z, ry, m, ready] of msg.p) {
+      if (ready) this.readyLanes.add(lane);
+      if (this.mode === 'play' && lane === this.myLane) {
+        if (performance.now() - (this.readySentAt || 0) > 600) this.myReady = !!ready;
+        continue;
+      }
       seen.add(lane);
       const a = this.avatars.get(lane);
       if (!a) continue;
@@ -305,6 +312,7 @@ export class RaceScene {
       },
       onHit: (R, hit) => {
         this.shake = 0.5;
+        app.paint.impact(0.6);
         app.audio.play(hit.cause === 'laser' ? 'zap' : 'hit');
         app.ui.hurt();
       },
@@ -324,7 +332,7 @@ export class RaceScene {
     }
     app.audio.play('derezz');
     app.ui.center('DEREZZED', 'red', 2600);
-    app.ui.sub(app.lockoutMinutes > 0 ? 'Locked out for 1 hour · watching the rest of the race' : 'Watching the rest of the race', 6000);
+    app.ui.sub(app.lockoutMinutes > 0 ? 'Locked out for 1 hour · watching the rest of the race' : 'Watching the rest of the race · press R to race again', 6000);
     this.arms.visible = false;
   }
 
@@ -526,6 +534,12 @@ export class RaceScene {
   updateLobby(dt, input) {
     const app = this.app;
     const cam = app.camera;
+    if (this.mode === 'play' && !app.menuOpen && input.hit('Enter', 'NumpadEnter')) {
+      this.myReady = !this.myReady;
+      this.readySentAt = performance.now();
+      app.net.send({ t: 'ready', on: this.myReady });
+      app.audio.play('ui');
+    }
     const [mx, my] = input.takeMouse();
     this.lobbyYaw -= mx * 0.0024;
     this.lobbyPitch = clamp(this.lobbyPitch - my * 0.002, -0.7, 0.4);
@@ -739,7 +753,7 @@ export class RaceScene {
       }
       const o = this.avatars.get(r.i);
       if (this.status === 'lobby') {
-        if (o && o.tx !== undefined) rows.push({ name: r.n, color: r.c, z: 0, status: 'READY' });
+        if (o && o.tx !== undefined) rows.push({ name: r.n, color: r.c, z: 0, status: this.readyLanes?.has(r.i) ? 'READY' : 'WAITING' });
         continue;
       }
       if (this.lost.has(r.i)) {
@@ -758,8 +772,9 @@ export class RaceScene {
 
     if (this.status === 'lobby') {
       const left = Math.max(0, Math.ceil((this.room.lobbyEndsAt - this.app.net.now()) / 1000));
-      const n = (this.lobbyCount ?? 1);
-      ui.sub(`RACE STARTS IN ${left} · ${n} ${n === 1 ? 'PLAYER' : 'PLAYERS'} READY · AI FILLS EMPTY LANES · Esc to leave`, 400);
+      const n = this.lobbyCount ?? 1;
+      const me = this.mode === 'play' ? (this.myReady ? 'YOU ARE READY (Enter to cancel)' : 'PRESS ENTER WHEN READY') : 'SPECTATING';
+      ui.sub(`RACE STARTS IN ${left} · ${n} ${n === 1 ? 'PLAYER' : 'PLAYERS'} · AI FILLS EMPTY LANES · ${me} · Esc to leave`, 400);
     }
     const R = this.R;
     if (this.mode === 'play' && R) ui.setDash(Math.max(0, R.z), R.vz, R.stamina, R.exhausted);
