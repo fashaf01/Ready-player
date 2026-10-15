@@ -144,6 +144,7 @@ export class UI {
 
   showRaceHud(on) {
     $('hud-race').classList.toggle('show', on);
+    document.body.classList.toggle('racing', on);
     if (!on) {
       this.center('');
       this.sub('');

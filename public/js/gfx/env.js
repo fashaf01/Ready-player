@@ -1,8 +1,12 @@
-// The world around everything: painted sky and sun, stars, the megacity far
-// below, flying traffic, giant holo rings and floating billboards.
+// The world around everything: a sunny anime sky with big painted clouds, a
+// pastel beach city far below with palm trees and the sea, flying traffic,
+// seagulls and billboards.
 
 import * as THREE from 'three';
-import { canvasTex, neon, textPlane, rand, toon } from './common.js';
+import { canvasTex, textPlane, rand, toon, palms } from './common.js';
+
+const GROUND_Y = -140;
+const SHORE_X = 380;
 
 export class Environment {
   constructor(scene) {
@@ -12,12 +16,11 @@ export class Environment {
     this.buildSky();
     this.buildCity();
     this.buildTraffic();
-    this.buildHolos();
+    this.buildBirds();
+    this.buildBillboards();
   }
 
   buildSky() {
-    // A painted anime sunset: violet zenith, hot pink horizon, a striped sun
-    // at the far end of the track and cel-shaded clouds lit from below.
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(3000, 48, 24),
       new THREE.ShaderMaterial({
@@ -41,45 +44,42 @@ export class Environment {
           void main(){
             vec3 d = normalize(vP);
             float h = d.y;
-            vec3 sunDir = normalize(vec3(0.0, 0.06, 1.0));
+            vec3 sunDir = normalize(vec3(-0.45, 0.55, 0.7));
             float sd = max(dot(d, sunDir), 0.0);
 
-            vec3 zen = vec3(0.03, 0.012, 0.11);
-            vec3 mid = vec3(0.17, 0.04, 0.34);
-            vec3 hor = vec3(1.05, 0.26, 0.46);
-            vec3 low = vec3(0.06, 0.012, 0.14);
-            vec3 c = h > 0.0 ? mix(mid, zen, smoothstep(0.0, 0.55, h)) : mix(mid, low, smoothstep(0.0, 0.22, -h));
-            c = mix(c, hor, exp(-abs(h) * 8.0) * (0.35 + 0.65 * pow(sd, 3.0)));
-            c += vec3(1.0, 0.42, 0.22) * pow(sd, 30.0) * 0.45 + vec3(0.9, 0.25, 0.5) * pow(sd, 6.0) * 0.22;
+            vec3 zen = vec3(0.03, 0.17, 0.72);
+            vec3 mid = vec3(0.09, 0.38, 0.95);
+            vec3 hor = vec3(0.5, 0.78, 1.0);
+            vec3 c = mix(hor, mid, smoothstep(0.0, 0.22, h));
+            c = mix(c, zen, smoothstep(0.2, 0.8, h));
+            if (h < 0.0) c = mix(hor, vec3(0.55, 0.76, 0.95), smoothstep(0.0, 0.25, -h));
+            c += vec3(1.0, 0.92, 0.75) * (pow(sd, 10.0) * 0.2 + pow(sd, 220.0) * 0.8);
+            c = mix(c, vec3(1.7, 1.6, 1.35), smoothstep(cos(0.045), cos(0.04), sd));
 
-            // Sun disc: warm top, pink bottom, the lower half sliced by bands.
-            float R = 0.15;
-            float disc = smoothstep(cos(R) - 0.0006, cos(R), sd);
-            float yy = (h - sunDir.y) / R;
-            vec3 sunCol = mix(vec3(1.25, 0.18, 0.55), vec3(1.55, 1.05, 0.4), smoothstep(-0.9, 0.8, yy));
-            float bands = yy < 0.15 ? step(0.38 + (0.15 - yy) * 0.25, fract(yy * 6.0 - uT * 0.12)) : 1.0;
-            c = mix(c, sunCol, disc * bands);
+            vec3 cw = vec3(1.03, 1.02, 1.0);
+            vec3 cm = vec3(0.80, 0.87, 0.99);
+            vec3 cs = vec3(0.58, 0.69, 0.92);
 
-            // Painted clouds on a layer above the city, flattened into 3 cel tones.
-            if (h > -0.03) {
-              vec2 uv = d.xz / (h + 0.12) * 0.9 + vec2(uT * 0.004, 0.0);
+            // A bank of towering cumulus on the horizon.
+            float u = atan(d.x, d.z);
+            float top = 0.04 + 0.22 * fbm(vec2(u * 2.2 + 3.0, 1.3)) * smoothstep(0.25, 0.65, fbm(vec2(u * 0.8, 7.0)));
+            float bank = smoothstep(top, top - 0.004, h) * smoothstep(-0.06, -0.01, h);
+            float puff = fbm(vec2(u * 10.0, h * 34.0) + 4.0);
+            float inside = clamp((top - h) / max(top, 0.01), 0.0, 1.0);
+            float lb = 1.0 - inside * 1.5 + (puff - 0.5) * 1.1 + pow(sd, 3.0) * 0.5;
+            vec3 bankCol = lb > 0.55 ? cw : lb > 0.15 ? cm : cs;
+            c = mix(c, bankCol, bank);
+
+            // Big puffy clouds drifting overhead.
+            if (h > 0.0) {
+              vec2 uv = d.xz / (h + 0.15) * 0.55 + vec2(uT * 0.004, 0.0);
               float n = fbm(uv);
-              float cover = smoothstep(0.5, 0.62, n) * smoothstep(-0.03, 0.05, h) * (1.0 - smoothstep(0.25, 0.7, h));
-              float lit = fbm(uv - normalize(sunDir.xz + vec2(0.0001)) * 0.12) - n;
-              float tone = floor(clamp(0.5 - lit * 7.0, 0.0, 1.0) * 3.0) / 2.0;
-              float nearSun = pow(sd, 4.0);
-              vec3 shade = vec3(0.16, 0.05, 0.3);
-              vec3 midC = vec3(0.6, 0.15, 0.5);
-              vec3 rim = mix(vec3(1.1, 0.42, 0.62), vec3(1.9, 0.95, 0.55), nearSun);
-              vec3 cc = tone < 0.25 ? shade : tone < 0.75 ? midC : rim;
-              // Thin bright edge where the cloud meets the sky.
-              cc = mix(cc, rim * 1.1, smoothstep(0.5, 0.53, n) * (1.0 - smoothstep(0.53, 0.56, n)) * 0.8);
-              c = mix(c, cc, cover * 0.92);
+              float cover = smoothstep(0.53, 0.555, n) * smoothstep(0.03, 0.12, h) * (1.0 - smoothstep(0.55, 0.85, h));
+              float lit = n - fbm(uv + normalize(sunDir.xz) * 0.09);
+              vec3 cc = lit > 0.015 ? cw : lit > -0.035 ? cm : cs;
+              cc = mix(cc, cw * 1.06, smoothstep(0.53, 0.54, n) * (1.0 - smoothstep(0.54, 0.555, n)) * 0.6);
+              c = mix(c, cc, cover);
             }
-
-            // Long painted streaks across the horizon.
-            float streak = smoothstep(0.55, 0.9, noise(vec2(atan(d.x, d.z) * 3.0, h * 90.0))) * exp(-abs(h - 0.1) * 18.0);
-            c += vec3(1.0, 0.45, 0.6) * streak * 0.18;
             gl_FragColor = vec4(c, 1.0);
           }`,
       }),
@@ -87,148 +87,171 @@ export class Environment {
     sky.renderOrder = -10;
     this.sky = sky;
     this.group.add(sky);
-
-    // Stars (big enough to survive the paint filter).
-    const n = 1400;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const th = Math.random() * Math.PI * 2;
-      const ph = Math.acos(rand(0.3, 1));
-      const r = 2800;
-      pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
-      pos[i * 3 + 1] = r * Math.cos(ph);
-      pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffe6ff, size: 2.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 }));
-    this.group.add(stars);
   }
 
   buildCity() {
-    const windows = canvasTex(64, 128, (g, w, h) => {
-      g.fillStyle = '#000';
+    // Pastel towers with blue glass windows.
+    const windows = canvasTex(64, 256, (g, w, h) => {
+      g.fillStyle = '#ffffff';
       g.fillRect(0, 0, w, h);
-      const cols = ['#00e5ff', '#ff2bd6', '#ffcf33', '#8a5cff', '#ffffff'];
-      for (let y = 4; y < h; y += 8) {
-        for (let x = 3; x < w; x += 7) {
-          if (Math.random() < 0.38) {
-            g.fillStyle = cols[Math.floor(Math.random() * cols.length)];
-            g.globalAlpha = rand(0.35, 1);
-            g.fillRect(x, y, 4, 4);
-          }
-        }
+      for (let y = 4; y < h; y += 16) {
+        g.fillStyle = 'rgba(70,110,170,0.9)';
+        for (let x = 4; x < w - 4; x += 12) g.fillRect(x, y, 8, 9);
+        g.fillStyle = 'rgba(255,255,255,0.55)';
+        for (let x = 4; x < w - 4; x += 12) g.fillRect(x, y, 3, 9);
       }
-      g.globalAlpha = 1;
     });
     windows.wrapS = windows.wrapT = THREE.RepeatWrapping;
-    const mat = toon({ color: 0x1c1440, emissive: 0xffffff, emissiveMap: windows, emissiveIntensity: 1.4 });
+    windows.repeat.set(2, 3);
+    const mat = toon({ color: 0xffffff, map: windows });
     const geo = new THREE.BoxGeometry(1, 1, 1);
     geo.translate(0, 0.5, 0);
-    const count = 1100;
+    const count = 900;
     const city = new THREE.InstancedMesh(geo, mat, count);
+    const roofs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), toon({ color: 0xffffff }), count);
+    const pastel = ['#fff6ea', '#ffd9c2', '#cfe8ff', '#ffe7a3', '#d7f0dd', '#f8cfe0', '#e6dcff', '#ffffff', '#ffe0b8', '#c9f1f0'];
+    const roofCols = ['#ff8a5c', '#3fa0ff', '#ffffff', '#7a4dff', '#ffd23f', '#2bbf8a'];
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
+    const c = new THREE.Color();
+    const up = new THREE.Vector3(0, 1, 0);
     let i = 0;
     while (i < count) {
-      const x = rand(-1100, 1100);
+      const x = rand(-1100, SHORE_X - 40);
       const z = rand(-900, 1900);
       const nearTrack = Math.abs(x) < 70 && z > -120 && z < 520;
-      const nearHall = Math.hypot(x, z - 0) < 90;
+      const nearHall = Math.hypot(x, z) < 90;
       if (nearHall && Math.random() < 0.9) continue;
-      const tall = !nearTrack && Math.abs(x) < 400 && Math.random() < 0.18;
-      const base = -320;
-      const top = tall ? rand(-40, 90) : nearTrack ? rand(-170, -90) : rand(-260, -80);
-      const w = rand(14, tall ? 34 : 46);
-      const d = rand(14, tall ? 34 : 46);
-      m.compose(new THREE.Vector3(x, base, z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() < 0.3 ? rand(0, 1) : 0), new THREE.Vector3(w, top - base, d));
-      city.setMatrixAt(i++, m);
+      const tall = !nearTrack && Math.abs(x) < 450 && Math.random() < 0.2;
+      const top = tall ? rand(-20, 110) : nearTrack ? rand(-120, -70) : rand(-120, -30);
+      const w = rand(14, tall ? 30 : 42);
+      const d = rand(14, tall ? 30 : 42);
+      const rot = q.setFromAxisAngle(up, Math.random() < 0.3 ? rand(0, 1) : 0);
+      m.compose(new THREE.Vector3(x, GROUND_Y, z), rot, new THREE.Vector3(w, top - GROUND_Y, d));
+      city.setMatrixAt(i, m);
+      city.setColorAt(i, c.set(pastel[Math.floor(Math.random() * pastel.length)]));
+      m.compose(new THREE.Vector3(x, top, z), rot, new THREE.Vector3(w + 1.2, 1.4, d + 1.2));
+      roofs.setMatrixAt(i, m);
+      roofs.setColorAt(i, c.set(roofCols[Math.floor(Math.random() * roofCols.length)]));
+      i++;
     }
-    city.frustumCulled = false;
-    this.group.add(city);
+    city.frustumCulled = roofs.frustumCulled = false;
+    this.group.add(city, roofs);
 
-    // Streets glowing far below.
-    const grid = canvasTex(256, 256, (g, w, h) => {
-      g.fillStyle = '#040010';
+    // Streets, the beach and the sea.
+    const streets = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#efe3c8';
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = '#ff2bd6';
-      g.globalAlpha = 0.9;
+      g.fillStyle = '#9aa3ad';
+      g.fillRect(0, 0, w, 22);
+      g.fillRect(0, 0, 22, h);
+      g.fillStyle = '#ffffff';
+      for (let k = 30; k < w; k += 24) g.fillRect(k, 10, 12, 2);
+      g.fillStyle = '#7fcf7a';
+      g.fillRect(60, 60, 60, 60);
+    });
+    streets.wrapS = streets.wrapT = THREE.RepeatWrapping;
+    streets.repeat.set(24, 30);
+    const land = new THREE.Mesh(new THREE.PlaneGeometry(1600, 3200), toon({ map: streets }));
+    land.rotation.x = -Math.PI / 2;
+    land.position.set(SHORE_X - 800, GROUND_Y, 500);
+    this.group.add(land);
+    const beach = new THREE.Mesh(new THREE.PlaneGeometry(60, 3200), toon({ color: 0xf6e2b0 }));
+    beach.rotation.x = -Math.PI / 2;
+    beach.position.set(SHORE_X + 30, GROUND_Y + 0.2, 500);
+    this.group.add(beach);
+    const waves = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#2a9be6';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(255,255,255,0.55)';
       g.lineWidth = 3;
-      for (let k = 0; k <= w; k += 64) {
+      for (let k = 0; k < 40; k++) {
+        const x = Math.random() * w, y = Math.random() * h;
         g.beginPath();
-        g.moveTo(k, 0);
-        g.lineTo(k, h);
-        g.stroke();
-        g.beginPath();
-        g.moveTo(0, k);
-        g.lineTo(w, k);
+        g.moveTo(x, y);
+        g.quadraticCurveTo(x + 10, y - 4, x + 22, y);
         g.stroke();
       }
     });
-    grid.wrapS = grid.wrapT = THREE.RepeatWrapping;
-    grid.repeat.set(40, 40);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshBasicMaterial({ map: grid, color: new THREE.Color(0.9, 0.9, 1) }));
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0, -320, 500);
-    this.group.add(floor);
+    waves.wrapS = waves.wrapT = THREE.RepeatWrapping;
+    waves.repeat.set(30, 60);
+    this.waves = waves;
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3200), toon({ map: waves }));
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.set(SHORE_X + 60 + 1500, GROUND_Y - 0.5, 500);
+    this.group.add(sea);
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(6, 3200), toon({ color: 0xffffff }));
+    foam.rotation.x = -Math.PI / 2;
+    foam.position.set(SHORE_X + 61, GROUND_Y - 0.3, 500);
+    this.group.add(foam);
+
+    // Palms along the beach and dotted through the city.
+    const spots = [];
+    for (let z = -900; z < 1900; z += rand(14, 30)) spots.push({ x: SHORE_X + rand(5, 50), y: GROUND_Y, z, s: rand(1.6, 2.4) });
+    for (let k = 0; k < 160; k++) spots.push({ x: rand(-900, SHORE_X - 20), y: GROUND_Y, z: rand(-700, 1700), s: rand(1.6, 2.4) });
+    this.group.add(palms(spots));
   }
 
   buildTraffic() {
-    const n = 90;
-    const geo = new THREE.BoxGeometry(0.9, 0.5, 4.2);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const n = 70;
+    const geo = new THREE.CapsuleGeometry(0.9, 2.6, 4, 8).rotateX(Math.PI / 2);
+    const mat = toon({ color: 0xffffff });
     this.traffic = new THREE.InstancedMesh(geo, mat, n);
     this.traffic.frustumCulled = false;
     this.cars = [];
-    const cols = [new THREE.Color(2, 0.2, 0.3), new THREE.Color(2, 2, 2.2), new THREE.Color(0.2, 1.6, 2), new THREE.Color(2, 0.4, 1.8)];
+    const cols = ['#ff4f5e', '#ffd23f', '#3fa0ff', '#ffffff', '#ff8a2a', '#2bbf8a', '#7a4dff'];
     for (let i = 0; i < n; i++) {
       const alongZ = Math.random() < 0.5;
-      const lane = rand(-1, 1) > 0 ? 1 : -1;
       this.cars.push({
         alongZ,
-        dir: lane,
-        speed: rand(30, 80),
+        dir: Math.random() < 0.5 ? -1 : 1,
+        speed: rand(25, 60),
         off: rand(0, 3000),
-        a: alongZ ? (Math.random() < 0.5 ? -1 : 1) * rand(90, 600) : rand(-600, 1400),
-        y: rand(-140, 70),
+        a: alongZ ? (Math.random() < 0.5 ? -1 : 1) * rand(90, 360) : rand(-600, 1400),
+        y: rand(-110, 40),
       });
-      this.traffic.setColorAt(i, cols[i % cols.length]);
+      this.traffic.setColorAt(i, new THREE.Color(cols[i % cols.length]));
     }
     this.group.add(this.traffic);
   }
 
-  buildHolos() {
-    this.rings = [];
-    const ringSpecs = [
-      { p: [-260, 120, 300], r: 90, c: '#00e5ff' },
-      { p: [320, 90, 700], r: 120, c: '#ff2bd6' },
-      { p: [0, 260, 1300], r: 200, c: '#8a5cff' },
-      { p: [180, 60, -260], r: 70, c: '#ffcf33' },
-    ];
-    for (const s of ringSpecs) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(s.r, 1.4, 8, 96), neon(s.c, 1.4, { transparent: true, opacity: 0.8 }));
-      ring.position.set(...s.p);
-      ring.rotation.set(rand(0, 1), rand(0, 3), 0);
-      this.group.add(ring);
-      this.rings.push(ring);
+  buildBirds() {
+    // Seagulls: little white V shapes circling in the sky.
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, -0.9, 0.25, -0.2, -0.3, 0.05, 0.1, 0, 0, 0, 0.3, 0.05, 0.1, 0.9, 0.25, -0.2], 3));
+    g.computeVertexNormals();
+    this.birds = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), 26);
+    this.birds.frustumCulled = false;
+    this.flock = [];
+    for (let i = 0; i < 26; i++) {
+      this.flock.push({ cx: rand(-80, 80), cz: rand(-40, 420), r: rand(15, 60), y: rand(18, 55), w: rand(0.15, 0.35) * (Math.random() < 0.5 ? -1 : 1), ph: rand(0, 6.28), s: rand(1.2, 2) });
     }
+    this.group.add(this.birds);
+  }
+
+  buildBillboards() {
     const ads = [
-      ['THE HUNT', '#00e5ff', [-70, 34, 140], 0.5],
-      ['NEON COLA', '#ff2bd6', [72, 28, 230], -0.5],
-      ['SYNTH FM 88.8', '#ffcf33', [-80, 40, 330], 0.6],
-      ['THREE GATES · ONE KEY', '#8a5cff', [76, 44, 420], -0.6],
-      ['NO ONE HAS BEATEN TIME', '#ff3355', [-60, 30, 40], 0.4],
-      ['GATE I IS OPEN', '#00ffa3', [-95, 52, 470], 0.7],
-      ['HOVERWAY 9 · CLOSED', '#ff6a00', [90, 22, 60], -0.8],
+      ['THE HUNT', '#ff7a1a', [-70, 34, 140], 0.5],
+      ['SUN COLA', '#ff4f9a', [72, 28, 230], -0.5],
+      ['BEACH FM 88.8', '#2a6df4', [-80, 40, 330], 0.6],
+      ['THREE GATES · ONE KEY', '#7a4dff', [76, 44, 420], -0.6],
+      ['NO ONE HAS BEATEN TIME', '#e8343f', [-60, 30, 40], 0.4],
+      ['GATE I IS OPEN', '#14a37f', [-95, 52, 470], 0.7],
+      ['HOVERWAY 9 · CLOSED', '#ff7a1a', [90, 22, 60], -0.8],
     ];
     for (const [txt, col, p, ry] of ads) {
       const w = Math.max(24, txt.length * 2.4);
-      const sign = textPlane(txt, { w, h: 7, px: 160, color: col, bg: 'rgba(8,2,24,0.55)', boost: 1.4 });
+      const sign = textPlane(txt, { w, h: 7, px: 160, color: col, bg: '#fffaf0', boost: 1, glow: 0, font: '400 {S}px "Dela Gothic One", Orbitron, sans-serif' });
+      sign.material.transparent = false;
+      sign.material.depthWrite = true;
       sign.position.set(...p);
       sign.rotation.y = Math.PI + ry;
-      const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 1, 8), neon(col, 1.2, { transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
-      frame.position.z = 0.05;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 1.4, 8.4, 0.6), toon({ color: 0x1b1b22 }));
+      frame.position.z = -0.35;
       sign.add(frame);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.8, 60, 0.8), toon({ color: 0xe9e4da }));
+      leg.position.set(0, -34, -0.4);
+      sign.add(leg);
       this.group.add(sign);
     }
   }
@@ -237,10 +260,12 @@ export class Environment {
     this.time += dt;
     const t = this.time;
     this.sky.material.uniforms.uT.value = t;
+    this.waves.offset.x = (t * 0.01) % 1;
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3(1, 1, 1);
+    const up = new THREE.Vector3(0, 1, 0);
     for (let i = 0; i < this.cars.length; i++) {
       const c = this.cars[i];
       const d = (((c.off + t * c.speed * c.dir) % 3000) + 3000) % 3000 - 1500;
@@ -249,12 +274,23 @@ export class Environment {
         q.identity();
       } else {
         p.set(d, c.y, c.a);
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+        q.setFromAxisAngle(up, Math.PI / 2);
       }
       m.compose(p, q, s);
       this.traffic.setMatrixAt(i, m);
     }
     this.traffic.instanceMatrix.needsUpdate = true;
-    for (const [i, r] of this.rings.entries()) r.rotation.z += dt * (0.05 + i * 0.02);
+    const bs = new THREE.Vector3();
+    for (let i = 0; i < this.flock.length; i++) {
+      const b = this.flock[i];
+      const a = b.ph + t * b.w;
+      p.set(b.cx + Math.cos(a) * b.r, b.y + Math.sin(t * 0.7 + b.ph) * 2, b.cz + Math.sin(a) * b.r);
+      q.setFromAxisAngle(up, -a + (b.w > 0 ? 0 : Math.PI));
+      const flap = 0.6 + 0.4 * Math.sin(t * 9 + b.ph * 3);
+      bs.set(b.s, b.s * flap, b.s);
+      m.compose(p, q, bs);
+      this.birds.setMatrixAt(i, m);
+    }
+    this.birds.instanceMatrix.needsUpdate = true;
   }
 }

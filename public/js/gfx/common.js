@@ -12,8 +12,8 @@ export function createRenderer(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0320);
-  scene.fog = new THREE.FogExp2(0x2a0c46, 0.0036);
+  scene.background = new THREE.Color(0x7cc8ff);
+  scene.fog = new THREE.FogExp2(0x9fd6ff, 0.0016);
 
   const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 4000);
   const paint = new PaintPipeline(renderer, scene, camera);
@@ -25,12 +25,12 @@ export function createRenderer(container) {
     paint.setSize(innerWidth, innerHeight);
   });
 
-  // Anime lighting: a cool violet fill, and one warm key light from the
-  // sunset that the toon materials split into hard light/shadow bands.
-  const hemi = new THREE.HemisphereLight(0x7a5cff, 0x2a0838, 1.1);
+  // Sunny anime lighting: a sky-blue fill (so shadows go cool blue) and one
+  // warm high sun that the toon materials split into hard light/shadow bands.
+  const hemi = new THREE.HemisphereLight(0x8fc8ff, 0xd9b48a, 0.95);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffb59a, 1.7);
-  sun.position.set(-60, 70, -50);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.9);
+  sun.position.set(-50, 90, -40);
   scene.add(sun);
 
   return { renderer, scene, camera, paint };
@@ -38,7 +38,7 @@ export function createRenderer(container) {
 
 // Three hard light bands for cel shading.
 const TOON_RAMP = (() => {
-  const t = new THREE.DataTexture(new Uint8Array([46, 120, 205, 255]), 4, 1, THREE.RedFormat);
+  const t = new THREE.DataTexture(new Uint8Array([70, 150, 230, 255]), 4, 1, THREE.RedFormat);
   t.minFilter = t.magFilter = THREE.NearestFilter;
   t.generateMipmaps = false;
   t.needsUpdate = true;
@@ -46,7 +46,7 @@ const TOON_RAMP = (() => {
 })();
 
 // Shared rim light: a hard anime edge highlight on curved surfaces.
-const RIM = { color: { value: new THREE.Color(1.0, 0.42, 0.85) }, strength: { value: 0.55 } };
+const RIM = { color: { value: new THREE.Color(1.0, 0.95, 0.85) }, strength: { value: 0.3 } };
 
 function addRim(shader) {
   shader.uniforms.rimColor = RIM.color;
@@ -152,13 +152,15 @@ export function nameSprite(text, color = '#ffffff') {
   g.font = '700 54px Rajdhani, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  const w = Math.min(500, g.measureText(text).width + 40);
-  g.fillStyle = 'rgba(5,2,20,0.55)';
+  const w = Math.min(496, g.measureText(text).width + 40);
+  g.fillStyle = '#16161d';
+  g.fillRect((512 - w) / 2 - 3, 11, w + 6, 74);
+  g.fillStyle = '#fffaf0';
   g.fillRect((512 - w) / 2, 14, w, 68);
   g.fillStyle = color;
-  g.fillRect((512 - w) / 2, 78, w, 4);
-  g.fillStyle = '#ffffff';
-  g.fillText(text, 256, 49);
+  g.fillRect((512 - w) / 2, 72, w, 10);
+  g.fillStyle = '#16161d';
+  g.fillText(text, 256, 46);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true, toneMapped: false }));
@@ -185,3 +187,89 @@ export const rand = (a, b) => a + Math.random() * (b - a);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
+
+// Joins geometries into one (non-indexed position/normal/uv only).
+export function mergeGeometries(list) {
+  const parts = list.map((g) => (g.index ? g.toNonIndexed() : g));
+  const total = parts.reduce((n, g) => n + g.attributes.position.count, 0);
+  const out = new THREE.BufferGeometry();
+  for (const [name, size] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+    const arr = new Float32Array(total * size);
+    let off = 0;
+    for (const g of parts) {
+      arr.set(g.attributes[name].array, off);
+      off += g.attributes[name].count * size;
+    }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+  }
+  out.computeBoundingSphere();
+  return out;
+}
+
+// A palm tree about 9 m tall: a curved ringed trunk and drooping fronds.
+let palmGeos = null;
+function getPalmGeos() {
+  if (palmGeos) return palmGeos;
+  const trunk = [];
+  const curve = (y) => 0.035 * y * y;
+  const H = 8.4, SEG = 7;
+  for (let i = 0; i < SEG; i++) {
+    const y0 = (i / SEG) * H, y1 = ((i + 1) / SEG) * H;
+    const r0 = 0.26 - i * 0.015;
+    const seg = new THREE.CylinderGeometry(r0 - 0.03, r0, y1 - y0 + 0.05, 9);
+    const lean = Math.atan2(curve(y1) - curve(y0), y1 - y0);
+    seg.rotateZ(-lean);
+    seg.translate((curve(y0) + curve(y1)) / 2, (y0 + y1) / 2, 0);
+    trunk.push(seg);
+  }
+  const topX = curve(H);
+  const fronds = [];
+  const N = 9;
+  for (let i = 0; i < N; i++) {
+    const leaf = new THREE.PlaneGeometry(1.1, 4.4, 1, 10);
+    const pos = leaf.attributes.position;
+    for (let k = 0; k < pos.count; k++) {
+      const t = (pos.getY(k) + 2.2) / 4.4; // 0 at the crown, 1 at the tip
+      const w = Math.sin(Math.PI * Math.min(1, t * 1.15)) * (1 - t * 0.35);
+      pos.setX(k, pos.getX(k) * w);
+      // Lay it outward along +z and let it droop.
+      pos.setZ(k, t * 4.2);
+      pos.setY(k, 0.9 * t - 2.1 * t * t + Math.abs(pos.getX(k)) * 0.25);
+    }
+    leaf.computeVertexNormals();
+    leaf.rotateY((i / N) * Math.PI * 2 + (i % 2) * 0.2);
+    leaf.translate(topX, H, 0);
+    fronds.push(leaf);
+  }
+  for (let i = 0; i < 3; i++) {
+    const nut = new THREE.SphereGeometry(0.17, 8, 6);
+    const a = (i / 3) * Math.PI * 2;
+    nut.translate(topX + Math.cos(a) * 0.22, H - 0.25, Math.sin(a) * 0.22);
+    trunk.push(nut);
+  }
+  palmGeos = { trunk: mergeGeometries(trunk), fronds: mergeGeometries(fronds) };
+  return palmGeos;
+}
+
+// Instanced palms. spots: [{ x, y, z, s = 1, ry = random }]
+export function palms(spots) {
+  const { trunk, fronds } = getPalmGeos();
+  const g = new THREE.Group();
+  const tm = new THREE.InstancedMesh(trunk, toon({ color: 0xa8784c }), spots.length);
+  const fm = new THREE.InstancedMesh(fronds, toon({ color: 0xffffff, side: THREE.DoubleSide }), spots.length);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const col = new THREE.Color();
+  spots.forEach((p, i) => {
+    const s = p.s ?? 1;
+    q.setFromAxisAngle(up, p.ry ?? Math.random() * Math.PI * 2);
+    m.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(s, s, s));
+    tm.setMatrixAt(i, m);
+    fm.setMatrixAt(i, m);
+    fm.setColorAt(i, col.setHSL(0.3 + Math.random() * 0.05, 0.62, 0.42 + Math.random() * 0.1));
+  });
+  tm.frustumCulled = fm.frustumCulled = false;
+  g.add(tm, fm);
+  return g;
+}

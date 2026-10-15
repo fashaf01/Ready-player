@@ -5,23 +5,81 @@
 import * as THREE from 'three';
 import { TRACK } from '/shared/constants.js';
 import { OBST, ballState, blockState, gateHeight, trapState, pistonExt, crashState } from '/shared/course.js';
-import { neon, metal, toon, canvasTex, textPlane, disposeTree, rand } from './common.js';
+import { neon, metal, toon, canvasTex, textPlane, disposeTree, rand, palms } from './common.js';
 
 const { HALF_W, EDGE_X, LANE_W, LENGTH, PANEL_LEN, RAIL_H, DECK_T } = TRACK;
 const PANELS = Math.ceil(LENGTH / PANEL_LEN);
+const BLOCK_COLS = [0xffd23f, 0x2a6df4, 0xff4f9a, 0x22c38e, 0x7a4dff, 0xff7a1a];
+
+// Streetball court lines (blue court, orange keys, white lines).
+function courtPaint(g, w, h) {
+  g.fillStyle = '#2f78e0';
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ff8a3c';
+  for (const y of [0, h - 150]) g.fillRect(w / 2 - 70, y, 140, 150);
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 6;
+  g.strokeRect(14, 14, w - 28, h - 28);
+  g.beginPath();
+  g.moveTo(14, h / 2);
+  g.lineTo(w - 14, h / 2);
+  g.stroke();
+  g.beginPath();
+  g.arc(w / 2, h / 2, 60, 0, Math.PI * 2);
+  g.stroke();
+  for (const [y, dir] of [[14, 1], [h - 14, -1]]) {
+    g.strokeRect(w / 2 - 70, dir > 0 ? y : y - 136, 140, 136);
+    g.beginPath();
+    g.arc(w / 2, y + dir * 136, 60, dir > 0 ? 0 : Math.PI, dir > 0 ? Math.PI : Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.arc(w / 2, y, 165, dir > 0 ? 0.12 : Math.PI + 0.12, dir > 0 ? Math.PI - 0.12 : Math.PI * 2 - 0.12);
+    g.stroke();
+  }
+  for (let k = 0; k < 2500; k++) {
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,20,60,0.06)';
+    g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+  }
+}
+
+// A streetball hoop on a pole.
+export function basketHoop() {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 3.6, 10), metal(0x2a2f3c));
+  pole.position.y = 1.8;
+  g.add(pole);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.9), metal(0x2a2f3c));
+  arm.position.set(0, 3.5, 0.45);
+  g.add(arm);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.06), metal(0xffffff));
+  board.position.set(0, 3.55, 0.92);
+  g.add(board);
+  const square = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.07), metal(0xff7a1a));
+  square.position.set(0, 3.4, 0.93);
+  g.add(square);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.025, 6, 20), metal(0xff5a1a));
+  rim.rotation.x = Math.PI / 2;
+  rim.position.set(0, 3.1, 1.2);
+  g.add(rim);
+  const net = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.15, 0.4, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }));
+  net.position.set(0, 2.88, 1.2);
+  g.add(net);
+  return g;
+}
 
 let laneTex = null;
 function getLaneTex() {
   if (laneTex) return laneTex;
+  // Red running-track surface with white lane lines.
   laneTex = canvasTex(128, 256, (g, w, h) => {
-    g.fillStyle = '#0b0c1e';
+    g.fillStyle = '#d85a3c';
     g.fillRect(0, 0, w, h);
-    g.fillStyle = 'rgba(120,140,255,0.08)';
-    for (let y = 0; y < h; y += 32) g.fillRect(0, y, w, 1);
-    g.fillStyle = 'rgba(0,229,255,0.9)';
-    g.fillRect(0, 0, 3, h);
-    g.fillStyle = 'rgba(255,43,214,0.35)';
-    g.fillRect(0, h / 2 - 1, w, 2);
+    for (let k = 0; k < 900; k++) {
+      g.fillStyle = Math.random() < 0.5 ? 'rgba(255,190,160,0.18)' : 'rgba(120,30,20,0.16)';
+      g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 4, h);
   });
   laneTex.wrapS = laneTex.wrapT = THREE.RepeatWrapping;
   laneTex.userData.shared = true;
@@ -88,10 +146,10 @@ function deckPiece(x0, x1, z0, z1) {
     uv.setXY(i, (wx + HALF_W) / LANE_W, wz / 8);
   }
   const tex = getLaneTex();
-  const topMesh = new THREE.Mesh(top, toon({ map: tex, color: 0x6a6488, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.75 }));
+  const topMesh = new THREE.Mesh(top, toon({ map: tex }));
   topMesh.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
   g.add(topMesh);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(w, DECK_T, l), metal(0x0a0a18));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, DECK_T, l), metal(0xe4e2ea));
   body.position.set((x0 + x1) / 2, -DECK_T / 2 - 0.005, (z0 + z1) / 2);
   g.add(body);
   g.userData.top = topMesh;
@@ -117,41 +175,31 @@ export class TrackView {
     const S = this.static;
 
     // Start plaza.
-    const plazaTex = canvasTex(256, 256, (g, w, h) => {
-      g.fillStyle = '#0a0a1c';
-      g.fillRect(0, 0, w, h);
-      g.strokeStyle = 'rgba(0,229,255,0.35)';
-      g.lineWidth = 2;
-      const r = 22;
-      for (let y = 0; y < h + r; y += r * 1.5) {
-        for (let x = 0; x < w + r; x += r * Math.sqrt(3)) {
-          const ox = (Math.round(y / (r * 1.5)) % 2) * (r * Math.sqrt(3)) / 2;
-          g.beginPath();
-          for (let k = 0; k < 6; k++) {
-            const a = (Math.PI / 3) * k + Math.PI / 6;
-            g.lineTo(x + ox + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9);
-          }
-          g.closePath();
-          g.stroke();
-        }
-      }
-    });
-    plazaTex.wrapS = plazaTex.wrapT = THREE.RepeatWrapping;
-    plazaTex.repeat.set(4, 6);
-    const plaza = new THREE.Mesh(new THREE.BoxGeometry(24, DECK_T, 35), toon({ map: plazaTex, color: 0x4a4468, emissive: 0xffffff, emissiveMap: plazaTex, emissiveIntensity: 0.5 }));
+    // The start plaza is a streetball court.
+    const plazaTex = canvasTex(384, 560, (g, w, h) => courtPaint(g, w, h));
+    const plaza = new THREE.Mesh(new THREE.BoxGeometry(24, DECK_T, 35), [metal(0xe4e2ea), metal(0xe4e2ea), toon({ map: plazaTex }), metal(0xe4e2ea), metal(0xe4e2ea), metal(0xe4e2ea)]);
     plaza.position.set(0, -DECK_T / 2, TRACK.PLAZA_START + 17.5);
     S.add(plaza);
     for (const sx of [-1, 1]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 35), neon('#ff2bd6', 2));
-      edge.position.set(sx * 12, 0.02, TRACK.PLAZA_START + 17.5);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 35), metal(0xff7a1a));
+      edge.position.set(sx * 12, 0.1, TRACK.PLAZA_START + 17.5);
       S.add(edge);
+    }
+    const plazaPalms = [];
+    for (const sx of [-1, 1]) for (const z of [-33, -24, -15, -6]) plazaPalms.push({ x: sx * 12.6, y: 0, z, s: 0.95 });
+    S.add(palms(plazaPalms));
+    for (const sx of [-1, 1]) {
+      const hoop = basketHoop();
+      hoop.position.set(sx * 9, 0, TRACK.PLAZA_START + 4);
+      hoop.rotation.y = sx > 0 ? -0.5 : 0.5;
+      S.add(hoop);
     }
 
     // Start line + arch.
-    const line = new THREE.Mesh(new THREE.BoxGeometry(EDGE_X * 2, 0.03, 0.25), neon('#ffffff', 2.5));
+    const line = new THREE.Mesh(new THREE.BoxGeometry(EDGE_X * 2, 0.03, 0.25), neon('#ffffff', 1.1));
     line.position.set(0, 0.02, 0);
     S.add(line);
-    S.add(this.arch(0, '#00e5ff', 'GATE I · THE RACE'));
+    S.add(this.arch(0, '#2a6df4', 'GATE I · THE RACE'));
 
     // Finish line + arch + giant clock.
     const checker = canvasTex(256, 32, (g, w, h) => {
@@ -164,7 +212,7 @@ export class TrackView {
     fin.rotation.x = -Math.PI / 2;
     fin.position.set(0, 0.02, LENGTH);
     S.add(fin);
-    S.add(this.arch(LENGTH, '#ffcf33', 'FINISH'));
+    S.add(this.arch(LENGTH, '#ff7a1a', 'FINISH'));
 
     const clock = new THREE.Group();
     clock.position.set(0, 17, LENGTH + 2);
@@ -191,14 +239,14 @@ export class TrackView {
     S.add(clock);
 
     // Run-out end wall.
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(EDGE_X * 2, 8), neon('#ff2bd6', 0.6, { transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(EDGE_X * 2, 8), neon('#ff7a1a', 0.9, { transparent: true, opacity: 0.35, side: THREE.DoubleSide }));
     wall.position.set(0, 4, TRACK.RUNOUT_END);
     S.add(wall);
 
     // Distance markers.
     for (let d = 50; d < LENGTH; d += 50) {
       for (const sx of [-1, 1]) {
-        const m = textPlane(`${d}`, { w: 3, h: 1.6, px: 160, color: '#ff2bd6', boost: 1.6 });
+        const m = textPlane(`${d}`, { w: 3, h: 1.6, px: 160, color: '#ffffff', bg: '#ff7a1a', glow: 0, boost: 1, font: '400 {S}px "Dela Gothic One", Orbitron, sans-serif' });
         m.position.set(sx * 10.5, 3.2, d);
         m.rotation.y = Math.PI;
         S.add(m);
@@ -207,17 +255,17 @@ export class TrackView {
 
     // Edge strips, rail posts and the glass part of the rails (all static).
     for (const sx of [-1, 1]) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, TRACK.RUNOUT_END + 1), neon('#ff2bd6', 2.2));
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, TRACK.RUNOUT_END + 1), metal(0xffffff));
       strip.position.set(sx * EDGE_X, -0.12, TRACK.RUNOUT_END / 2 - 0.5);
       S.add(strip);
-      const under = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, TRACK.RUNOUT_END + 1), neon('#8a5cff', 1.6));
+      const under = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, TRACK.RUNOUT_END + 1), metal(0xff7a1a));
       under.position.set(sx * (EDGE_X - 0.2), -DECK_T - 0.05, TRACK.RUNOUT_END / 2 - 0.5);
       S.add(under);
     }
     const postGeo = new THREE.BoxGeometry(0.14, RAIL_H + 0.05, 0.14);
-    const posts = new THREE.InstancedMesh(postGeo, metal(0x2a2e4a), (PANELS + 11) * 2);
+    const posts = new THREE.InstancedMesh(postGeo, metal(0xf5f3ee), (PANELS + 11) * 2);
     const glassGeo = new THREE.BoxGeometry(PANEL_LEN - 0.12, RAIL_H - 0.08, 0.04);
-    const glass = new THREE.InstancedMesh(glassGeo, new THREE.MeshBasicMaterial({ color: 0x2bd9ff, transparent: true, opacity: 0.1, depthWrite: false }), (PANELS + 10) * 2);
+    const glass = new THREE.InstancedMesh(glassGeo, new THREE.MeshBasicMaterial({ color: 0xb5e6ff, transparent: true, opacity: 0.3, depthWrite: false }), (PANELS + 10) * 2);
     const m = new THREE.Matrix4();
     let pi = 0, gi = 0;
     for (const sx of [-1, 1]) {
@@ -233,7 +281,7 @@ export class TrackView {
     S.add(posts, glass);
 
     // Under-deck ribs and hover emitters (seen when looking over the side).
-    const ribs = new THREE.InstancedMesh(new THREE.BoxGeometry(EDGE_X * 2 - 0.4, 0.25, 0.25), neon('#3a1a7a', 1.2), 56);
+    const ribs = new THREE.InstancedMesh(new THREE.BoxGeometry(EDGE_X * 2 - 0.4, 0.25, 0.25), metal(0xb9bccb), 56);
     for (let i = 0; i < 56; i++) {
       m.makeTranslation(0, -DECK_T - 0.15, i * 8 + 2);
       ribs.setMatrixAt(i, m);
@@ -244,7 +292,7 @@ export class TrackView {
       em.rotation.x = Math.PI / 2;
       em.position.set(0, -DECK_T - 0.6, z);
       S.add(em);
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 0.2, 30, 20, 1, true), neon('#00e5ff', 0.5, { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 0.2, 30, 20, 1, true), neon('#00e5ff', 0.5, { transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }));
       beam.position.set(0, -DECK_T - 15.6, z);
       S.add(beam);
     }
@@ -255,17 +303,17 @@ export class TrackView {
   arch(z, color, label) {
     const g = new THREE.Group();
     for (const sx of [-1, 1]) {
-      const p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 9, 0.7), metal(0x161a33));
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 9, 0.7), metal(0xf5f3ee));
       p.position.set(sx * 9.6, 4.5, z);
       g.add(p);
-      const s = new THREE.Mesh(new THREE.BoxGeometry(0.12, 9, 0.75), neon(color, 2.2));
+      const s = new THREE.Mesh(new THREE.BoxGeometry(0.14, 9, 0.75), metal(color));
       s.position.set(sx * 9.6 - sx * 0.36, 4.5, z);
       g.add(s);
     }
-    const top = new THREE.Mesh(new THREE.BoxGeometry(20, 1.4, 0.8), metal(0x161a33));
+    const top = new THREE.Mesh(new THREE.BoxGeometry(20, 1.4, 0.8), metal(color));
     top.position.set(0, 9.2, z);
     g.add(top);
-    const sign = textPlane(label, { w: 16, h: 1.2, px: 120, color, boost: 1.8 });
+    const sign = textPlane(label, { w: 16, h: 1.2, px: 120, color: '#ffffff', glow: 0, boost: 1, font: '400 {S}px "Dela Gothic One", Orbitron, sans-serif' });
     sign.position.set(0, 9.2, z - 0.42);
     sign.rotation.y = Math.PI;
     g.add(sign);
@@ -273,13 +321,19 @@ export class TrackView {
   }
 
   buildStands() {
-    const crowdGeo = new THREE.CapsuleGeometry(0.22, 0.5, 3, 6);
-    crowdGeo.translate(0, 0.47, 0);
+    // Spectators: a body in bright clothes and a head with a skin tone.
+    const bodyGeo = new THREE.CapsuleGeometry(0.2, 0.42, 3, 8);
+    bodyGeo.translate(0, 0.42, 0);
+    const headGeo = new THREE.SphereGeometry(0.13, 10, 8);
+    headGeo.translate(0, 0.98, 0);
     const per = 1400;
     this.crowd = [];
-    const palette = ['#00e5ff', '#ff2bd6', '#ffcf33', '#8a5cff', '#39ff14', '#ff6a00', '#ffffff'];
+    const clothes = ['#ffffff', '#2a6df4', '#ff7a1a', '#ffd23f', '#ff4f9a', '#22c38e', '#7a4dff', '#e8343f', '#1b1b22', '#3fc8ff'];
+    const skins = ['#f7d6bc', '#efc09c', '#dca47c', '#c4895e', '#a26c45', '#7f5134', '#5c3a25'];
+    const seatCols = [0x2a6df4, 0xff7a1a, 0xffd23f, 0x22c38e];
     for (const sx of [-1, 1]) {
-      const crowd = new THREE.InstancedMesh(crowdGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), per);
+      const bodies = new THREE.InstancedMesh(bodyGeo, toon({ color: 0xffffff }), per);
+      const heads = new THREE.InstancedMesh(headGeo, toon({ color: 0xffffff }), per);
       const base = [];
       const m = new THREE.Matrix4();
       const c = new THREE.Color();
@@ -287,34 +341,39 @@ export class TrackView {
       for (let z0 = -30; z0 < 430; z0 += 46) {
         const seg = new THREE.Group();
         for (let row = 0; row < 4; row++) {
-          const step = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 40), metal(0x0e1024));
+          const step = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 40), metal(row % 2 ? 0xf1ece2 : 0xe2ddd2));
           step.position.set(sx * (16 + row * 3), row * 0.9, z0 + 20);
           seg.add(step);
-          const lip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 40), neon(row % 2 ? '#ff2bd6' : '#00e5ff', 2));
-          lip.position.set(sx * (16 + row * 3 - 1.5), row * 0.9 + 0.3, z0 + 20);
-          seg.add(lip);
+          const seats = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 40), metal(seatCols[row]));
+          seats.position.set(sx * (16 + row * 3 - 1.1), row * 0.9 + 0.45, z0 + 20);
+          seg.add(seats);
           for (let k = 0; k < 34 && n < per; k++) {
             const x = sx * (16 + row * 3 + rand(-1, 1));
             const y = row * 0.9 + 0.3;
             const z = z0 + 1 + k * (38 / 34) + rand(-0.3, 0.3);
             m.makeTranslation(x, y, z);
-            crowd.setMatrixAt(n, m);
-            c.set(palette[Math.floor(Math.random() * palette.length)]).multiplyScalar(rand(0.25, 0.75));
-            crowd.setColorAt(n, c);
+            bodies.setMatrixAt(n, m);
+            heads.setMatrixAt(n, m);
+            bodies.setColorAt(n, c.set(clothes[Math.floor(Math.random() * clothes.length)]));
+            heads.setColorAt(n, c.set(skins[Math.floor(Math.random() * skins.length)]));
             base.push([x, y, z, Math.random() * 10, Math.random() < 0.25]);
             n++;
           }
         }
-        const glowUnder = new THREE.Mesh(new THREE.BoxGeometry(12, 0.1, 40), neon('#8a5cff', 0.9));
-        glowUnder.position.set(sx * 20.5, -0.4, z0 + 20);
-        seg.add(glowUnder);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5, 40), metal(0xffffff));
+        back.position.set(sx * 26.5, 1.4, z0 + 20);
+        seg.add(back);
         this.static.add(seg);
       }
-      crowd.count = n;
-      crowd.frustumCulled = false;
-      this.static.add(crowd);
-      this.crowd.push({ mesh: crowd, base });
+      bodies.count = heads.count = n;
+      bodies.frustumCulled = heads.frustumCulled = false;
+      this.static.add(bodies, heads);
+      this.crowd.push({ mesh: bodies, heads, base });
     }
+    // Palms lining the top of the stands.
+    const spots = [];
+    for (const sx of [-1, 1]) for (let z = -20; z < 430; z += 26) spots.push({ x: sx * 26.5, y: 3.9, z: z + rand(-4, 4), s: rand(0.9, 1.15) });
+    this.static.add(palms(spots));
   }
 
   // ------------------------------------------------------- per-race build
@@ -396,7 +455,7 @@ export class TrackView {
       grp.position.z = g.z;
       const col = g.type === 'sweep' ? '#ff2bd6' : '#ff3355';
       for (const sx of [-1, 1]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), metal(0x1d2040));
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), metal(0xf5f3ee));
         post.position.set(sx * 8.7, 1.3, 0);
         grp.add(post);
         const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.34), neon(col, 2.5));
@@ -417,7 +476,7 @@ export class TrackView {
       const w = tr.x1 - tr.x0, l = tr.z1 - tr.z0;
       const grp = new THREE.Group();
       grp.position.set((tr.x0 + tr.x1) / 2, 0, (tr.z0 + tr.z1) / 2);
-      const plate = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.1, l - 0.1), new THREE.MeshBasicMaterial({ color: 0x222233, transparent: true, opacity: 0.9 }));
+      const plate = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.1, l - 0.1), new THREE.MeshBasicMaterial({ color: 0x3a3f4f, transparent: true, opacity: 0.92 }));
       plate.rotation.x = -Math.PI / 2;
       plate.position.y = 0.012;
       grp.add(plate);
@@ -446,7 +505,7 @@ export class TrackView {
     this.pistonViews = course.pistons.map((p) => {
       const grp = new THREE.Group();
       grp.position.set(0, 0, p.z);
-      const housing = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 2.2), metal(0x23264a));
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 2.2), metal(0x4a5068));
       housing.position.set(p.side * 9.0, 1.1, 0);
       grp.add(housing);
       const warn = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.2, 2.25), neon('#ff3355', 2, { unique: true }));
@@ -454,7 +513,7 @@ export class TrackView {
       grp.add(warn);
       const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 0.35, 0.35), metal(0x8890b8));
       grp.add(arm);
-      const headMat = toon({ map: getHazardTex(), emissive: 0xffffff, emissiveMap: getHazardTex(), emissiveIntensity: 0.6 });
+      const headMat = toon({ map: getHazardTex() });
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, OBST.PISTON_DEPTH), headMat);
       head.position.y = 0.95;
       grp.add(head);
@@ -463,35 +522,38 @@ export class TrackView {
     });
 
     // Pools for balls, blocks and their shadows.
+    // Rolling balls are giant basketballs.
     const ballTex = canvasTex(256, 128, (g, w, h) => {
-      g.fillStyle = '#1a0010';
+      g.fillStyle = '#f07a2a';
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = '#ffffff';
+      for (let k = 0; k < 1400; k++) {
+        g.fillStyle = Math.random() < 0.5 ? 'rgba(255,200,150,0.25)' : 'rgba(150,60,10,0.25)';
+        g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+      }
+      g.strokeStyle = '#2a1408';
       g.lineWidth = 5;
-      for (let x = 0; x <= w; x += 32) {
-        g.beginPath();
+      g.beginPath();
+      g.moveTo(0, h / 2);
+      g.lineTo(w, h / 2);
+      for (const x of [w / 4, (3 * w) / 4]) {
         g.moveTo(x, 0);
         g.lineTo(x, h);
-        g.stroke();
       }
-      for (let y = 16; y < h; y += 32) {
+      g.stroke();
+      for (const cx of [0, w / 2, w]) {
         g.beginPath();
-        g.moveTo(0, y);
-        g.lineTo(w, y);
+        g.ellipse(cx, h / 2, w / 8, h / 2.2, 0, 0, Math.PI * 2);
         g.stroke();
       }
     });
-    const ballCols = ['#ff2bd6', '#ff6a00', '#ff3355', '#ffcf33'];
-    const ballMats = ballCols.map((c) => new THREE.MeshBasicMaterial({ map: ballTex, color: new THREE.Color(c).multiplyScalar(1.8) }));
-    const ballGeo = new THREE.SphereGeometry(1, 24, 16);
+    const ballMat = toon({ map: ballTex });
+    const ballGeo = new THREE.SphereGeometry(1, 28, 18);
     const shadowGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+    const ballShadow = new THREE.MeshBasicMaterial({ color: 0x1b1530, transparent: true, opacity: 0.28, depthWrite: false });
     this.ballPool = [];
     for (let i = 0; i < 64; i++) {
-      const mesh = new THREE.Mesh(ballGeo, ballMats[i % ballMats.length]);
-      const core = new THREE.Mesh(ballGeo, neon(ballCols[i % ballCols.length], 1.2, { transparent: true, opacity: 0.25, depthWrite: false }));
-      core.scale.setScalar(1.12);
-      mesh.add(core);
-      const shadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0xff2266, transparent: true, opacity: 0.3, depthWrite: false }));
+      const mesh = new THREE.Mesh(ballGeo, ballMat);
+      const shadow = new THREE.Mesh(shadowGeo, ballShadow.clone());
       mesh.visible = shadow.visible = false;
       D.add(mesh, shadow);
       this.ballPool.push({ mesh, shadow, id: -1 });
@@ -500,8 +562,8 @@ export class TrackView {
     const edgeGeo = new THREE.EdgesGeometry(blockGeo);
     this.blockPool = [];
     for (let i = 0; i < 20; i++) {
-      const mesh = new THREE.Mesh(blockGeo, metal(0x1b1f3a, { transparent: true, opacity: 1 }));
-      const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(2.5, 0.3, 0.5) }));
+      const mesh = new THREE.Mesh(blockGeo, metal(BLOCK_COLS[i % BLOCK_COLS.length], { transparent: true, opacity: 1 }));
+      const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x1b1b22 }));
       mesh.add(edges);
       const shadow = new THREE.Mesh(new THREE.PlaneGeometry(OBST.BLOCK_SIZE, OBST.BLOCK_SIZE).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2244, transparent: true, opacity: 0.4, depthWrite: false }));
       mesh.visible = shadow.visible = false;
@@ -796,8 +858,10 @@ export class TrackView {
         const hop = jumper ? Math.max(0, Math.sin(time * 7 + ph)) * 0.45 : 0;
         m.makeTranslation(x, y + hop, z);
         side.mesh.setMatrixAt(i, m);
+        side.heads.setMatrixAt(i, m);
       }
       side.mesh.instanceMatrix.needsUpdate = true;
+      side.heads.instanceMatrix.needsUpdate = true;
     }
 
     if (this.ledge) {

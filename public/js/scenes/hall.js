@@ -3,13 +3,14 @@
 
 import * as THREE from 'three';
 import { Avatar } from '../gfx/avatar.js';
-import { neon, metal, toon, canvasTex, textPlane, damp, clamp } from '../gfx/common.js';
+import { neon, metal, toon, canvasTex, textPlane, damp, clamp, palms } from '../gfx/common.js';
+import { basketHoop } from '../gfx/track.js';
 
 const RADIUS = 27;
 const GATES = [
-  { id: 1, name: 'GATE I', title: 'THE RACE', color: '#00e5ff', pos: [0, -19], open: true },
-  { id: 2, name: 'GATE II', title: 'SEALED', color: '#ff2bd6', pos: [-15.5, -11], open: false },
-  { id: 3, name: 'GATE III', title: 'SEALED', color: '#ffcf33', pos: [15.5, -11], open: false },
+  { id: 1, name: 'GATE I', title: 'THE RACE', color: '#1fb6ff', pos: [0, -19], open: true },
+  { id: 2, name: 'GATE II', title: 'SEALED', color: '#ff4f9a', pos: [-15.5, -11], open: false },
+  { id: 3, name: 'GATE III', title: 'SEALED', color: '#ffb21f', pos: [15.5, -11], open: false },
 ];
 const TERMINAL = [12, 3];
 
@@ -56,38 +57,53 @@ export class HallScene {
   build() {
     const G = this.group;
     // Platform.
-    const floorTex = canvasTex(512, 512, (g, w, h) => {
-      g.fillStyle = '#080716';
+    // A round streetball plaza: painted court in the middle, warm paving
+    // around it.
+    const floorTex = canvasTex(1024, 1024, (g, w, h) => {
+      g.fillStyle = '#f2dcb4';
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = 'rgba(0,229,255,0.25)';
-      g.lineWidth = 1;
-      for (let i = 0; i <= w; i += 32) {
-        g.beginPath();
-        g.moveTo(i, 0);
-        g.lineTo(i, h);
-        g.stroke();
-        g.beginPath();
-        g.moveTo(0, i);
-        g.lineTo(w, i);
-        g.stroke();
+      for (let y = 0; y < h; y += 32) {
+        for (let x = (y / 32) % 2 ? 0 : 32; x < w; x += 64) {
+          g.fillStyle = 'rgba(200,150,100,0.18)';
+          g.fillRect(x, y, 30, 30);
+        }
       }
+      const cw = 420, ch = 600;
+      g.save();
+      g.translate(w / 2 - cw / 2, h / 2 - ch / 2 + 80);
+      g.fillStyle = '#ff7a1a';
+      g.fillRect(-14, -14, cw + 28, ch + 28);
+      g.fillStyle = '#2f78e0';
+      g.fillRect(0, 0, cw, ch);
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 7;
+      g.strokeRect(10, 10, cw - 20, ch - 20);
+      g.beginPath();
+      g.moveTo(10, ch / 2);
+      g.lineTo(cw - 10, ch / 2);
+      g.stroke();
+      g.beginPath();
+      g.arc(cw / 2, ch / 2, 60, 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = '#ffd23f';
+      g.fillRect(cw / 2 - 70, 10, 140, 150);
+      g.strokeRect(cw / 2 - 70, 10, 140, 150);
+      g.restore();
     });
-    floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-    floorTex.repeat.set(5, 5);
     const floor = new THREE.Mesh(new THREE.CylinderGeometry(RADIUS, RADIUS - 3, 1.2, 96), [
-      metal(0x0d0b20),
-      toon({ map: floorTex, color: 0x6a6488, emissive: 0xffffff, emissiveMap: floorTex, emissiveIntensity: 0.8 }),
-      metal(0x0d0b20),
+      metal(0xe9e4da),
+      toon({ map: floorTex }),
+      metal(0xe9e4da),
     ]);
     floor.position.y = -0.6;
     G.add(floor);
-    for (const [r, c] of [[RADIUS - 0.2, '#ff2bd6'], [RADIUS * 0.62, '#00e5ff'], [RADIUS * 0.3, '#8a5cff'], [4, '#ffcf33']]) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.06, 6, 128), neon(c, 2));
+    for (const [r, c] of [[RADIUS - 0.2, '#ff7a1a'], [4, '#ffd23f']]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 6, 128), metal(c));
       ring.rotation.x = Math.PI / 2;
       ring.position.y = 0.02;
       G.add(ring);
     }
-    const under = new THREE.Mesh(new THREE.ConeGeometry(RADIUS - 3, 26, 64, 1, true), neon('#2a0f5c', 0.8, { side: THREE.DoubleSide }));
+    const under = new THREE.Mesh(new THREE.ConeGeometry(RADIUS - 3, 26, 64, 1, true), metal(0xd9d4ca, { side: THREE.DoubleSide }));
     under.rotation.x = Math.PI;
     under.position.y = -14;
     G.add(under);
@@ -108,7 +124,7 @@ export class HallScene {
       disc.position.y = 4;
       grp.add(disc);
       this.portals.push(mat);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4, 0.5, 48), metal(0x15183a));
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4, 0.5, 48), metal(0xf5f3ee));
       base.position.y = 0.25;
       grp.add(base);
       const baseGlow = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.06, 6, 64), neon(g.color, 2));
@@ -116,17 +132,17 @@ export class HallScene {
       baseGlow.position.y = 0.52;
       grp.add(baseGlow);
       for (const sx of [-1, 1]) {
-        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 7.6, 0.6), metal(0x15183a));
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 7.6, 0.6), metal(0xf5f3ee));
         pillar.position.set(sx * 4.2, 3.8, 0);
         grp.add(pillar);
         const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 7.6, 0.62), neon(g.color, 1.3));
         strip.position.set(sx * 4.2 - sx * 0.3, 3.8, 0);
         grp.add(strip);
       }
-      const label = textPlane(`${g.name}`, { w: 7, h: 1.2, px: 120, color: g.color, boost: 1.05, glow: 10 });
+      const label = textPlane(`${g.name}`, { w: 7, h: 1.2, px: 120, color: '#ffffff', bg: g.color, boost: 1, glow: 0, font: '400 {S}px "Dela Gothic One", Orbitron, sans-serif' });
       label.position.set(0, 8.4, 0);
       grp.add(label);
-      const sub = textPlane(g.title, { w: 7, h: 0.8, px: 100, color: g.open ? '#ffffff' : '#8fa3c7', boost: 0.9, glow: 6 });
+      const sub = textPlane(g.title, { w: 7, h: 0.8, px: 100, color: g.open ? '#1b1b22' : '#5d6475', boost: 1, glow: 0, font: '400 {S}px "Dela Gothic One", Orbitron, sans-serif' });
       sub.position.set(0, 7.5, 0);
       grp.add(sub);
       if (g.id === 1) this.gate1Sub = sub;
@@ -136,7 +152,7 @@ export class HallScene {
 
     // Final Key in the middle.
     const key = new THREE.Group();
-    const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.7, 1.1, 32), metal(0x15183a));
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.7, 1.1, 32), metal(0xf5f3ee));
     ped.position.y = 0.55;
     key.add(ped);
     const keyBody = new THREE.Group();
@@ -163,7 +179,7 @@ export class HallScene {
       key.add(s);
       this.shardMeshes.push(s);
     });
-    const keyLabel = textPlane('THE FINAL KEY', { w: 4.5, h: 0.6, px: 100, color: '#ffffff', boost: 0.9, glow: 6 });
+    const keyLabel = textPlane('THE FINAL KEY', { w: 4.5, h: 0.6, px: 100, color: '#1b1b22', boost: 1, glow: 0 });
     keyLabel.position.set(0, 1.45, 1.75);
     keyLabel.rotation.x = -0.35;
     key.add(keyLabel);
@@ -171,12 +187,12 @@ export class HallScene {
     G.add(key);
 
     // Scoreboard above Gate I.
-    this.board = textPlane('', { w: 28, h: 13, px: 512, color: '#00e5ff', bg: 'rgba(6,2,22,0.75)', boost: 0.85 });
+    this.board = textPlane('', { w: 28, h: 13, px: 512, color: '#1b1b22', bg: '#fffaf0', boost: 1 });
     this.board.position.set(0, 15.5, -28);
     this.board.lookAt(0, 8, 0);
     G.add(this.board);
-    const frame = new THREE.Mesh(new THREE.PlaneGeometry(28.6, 13.6), neon('#00e5ff', 1.2, { transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
-    frame.position.z = -0.05;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(29.2, 14.2, 0.5), metal(0x1b1b22));
+    frame.position.z = -0.3;
     this.board.add(frame);
     this.drawBoard({ clears: [], stats: { attempts: 0, clears: 0, players: 0 } });
 
@@ -184,20 +200,28 @@ export class HallScene {
     const term = new THREE.Group();
     term.position.set(TERMINAL[0], 0, TERMINAL[1]);
     term.lookAt(0, 0, 4);
-    const col = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 0.6), metal(0x15183a));
+    const col = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 0.6), metal(0xff7a1a));
     col.position.y = 0.7;
     term.add(col);
-    const screen = textPlane('LIVE RACES', { w: 2.6, h: 1.4, px: 160, color: '#00ffa3', bg: 'rgba(0,30,20,0.6)', boost: 1.0, glow: 8, lines: true });
+    const screen = textPlane('LIVE RACES', { w: 2.6, h: 1.4, px: 160, color: '#ffffff', bg: '#1b1b22', boost: 1.0, glow: 0, lines: true });
     screen.position.set(0, 2.3, 0);
     term.add(screen);
     this.termScreen = screen;
     G.add(term);
 
-    // Rotating holo ring above.
-    this.topRing = new THREE.Mesh(new THREE.TorusGeometry(20, 0.12, 6, 128), neon('#8a5cff', 1.6));
-    this.topRing.position.y = 22;
-    this.topRing.rotation.x = Math.PI / 2;
-    G.add(this.topRing);
+    // Palms around the open side of the plaza, and a couple of hoops.
+    const spots = [];
+    for (let i = 0; i < 11; i++) {
+      const a = -0.25 + (i / 10) * (Math.PI + 0.5);
+      spots.push({ x: Math.cos(a) * (RADIUS - 1.6), y: 0, z: Math.sin(a) * (RADIUS - 1.6), s: 0.9 + Math.random() * 0.3 });
+    }
+    G.add(palms(spots));
+    for (const [x, z, ry] of [[-19, 9, 2.2], [19, 9, -2.2]]) {
+      const hoop = basketHoop();
+      hoop.position.set(x, 0, z);
+      hoop.rotation.y = ry;
+      G.add(hoop);
+    }
 
     // Me.
     this.me = new Avatar({ color: '#00e5ff' });
@@ -210,33 +234,31 @@ export class HallScene {
     const g = this.board.ctx;
     const W = c.width, H = c.height;
     g.clearRect(0, 0, W, H);
-    g.fillStyle = 'rgba(6,2,22,0.78)';
+    g.fillStyle = '#fffaf0';
     g.fillRect(0, 0, W, H);
+    g.fillStyle = '#ff7a1a';
+    g.fillRect(0, 0, W, 86);
     g.textBaseline = 'middle';
-    g.shadowBlur = 16;
-    g.shadowColor = '#00e5ff';
-    g.fillStyle = '#00e5ff';
-    g.font = '900 54px Orbitron, sans-serif';
+    g.shadowBlur = 0;
+    g.fillStyle = '#ffffff';
+    g.font = '400 50px "Dela Gothic One", Orbitron, sans-serif';
     g.textAlign = 'center';
-    g.fillText('SCOREBOARD · GATE I', W / 2, 52);
-    g.shadowBlur = 8;
+    g.fillText('SCOREBOARD · GATE I', W / 2, 46);
     g.font = '700 30px Rajdhani, sans-serif';
-    g.fillStyle = '#8fa3c7';
+    g.fillStyle = '#5d6475';
     const s = data.stats || {};
     g.fillText(`ATTEMPTS ${s.attempts ?? 0}   ·   CLEARED ${s.clears ?? 0}   ·   AVATARS ${s.players ?? 0}`, W / 2, 104);
     g.textAlign = 'left';
     const list = data.clears || [];
     if (!list.length) {
       g.textAlign = 'center';
-      g.fillStyle = '#ff3355';
-      g.shadowColor = '#ff3355';
-      g.font = '900 46px Orbitron, sans-serif';
+      g.fillStyle = '#e8343f';
+      g.font = '400 44px "Dela Gothic One", Orbitron, sans-serif';
       g.fillText('NO ONE HAS BEATEN THE CLOCK', W / 2, H / 2 + 30);
     } else {
       list.slice(0, 10).forEach((e, i) => {
         const y = 160 + i * 34;
-        g.fillStyle = i === 0 ? '#ffcf33' : '#e8f6ff';
-        g.shadowColor = i === 0 ? '#ffcf33' : '#00e5ff';
+        g.fillStyle = i === 0 ? '#ff7a1a' : '#1b1b22';
         g.font = '900 28px Orbitron, sans-serif';
         g.fillText(`${String(i + 1).padStart(2, '0')}`, 60, y);
         g.font = '700 32px Rajdhani, sans-serif';
@@ -332,7 +354,6 @@ export class HallScene {
       s.position.set(Math.cos(a) * 1.4, 3 + Math.sin(t * 2 + i) * 0.2, Math.sin(a) * 1.4);
       s.rotation.y += dt * 2;
     });
-    this.topRing.rotation.z += dt * 0.1;
     for (const o of this.others.values()) {
       const px = o.av.root.position.x, pz = o.av.root.position.z;
       o.av.root.position.x = damp(px, o.tx, 8, dt);

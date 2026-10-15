@@ -1,4 +1,4 @@
-// The "anime oil painting" look, as a small post-processing chain:
+// The painted anime-illustration look, as a small post-processing chain:
 //
 //   scene ──► paint (Kuwahara: flattens detail into brush-like patches)
 //         ──► ink   (dark outlines from depth + colour edges, fade with distance)
@@ -72,25 +72,27 @@ void main() {
   vec2 px = lineWidth / resolution;
   vec3 col = texture2D(tDiffuse, vUv).rgb;
   float z = viewZ(vUv);
-  // Depth edges, relative to distance so far objects aren't all outline.
-  float zl = viewZ(vUv - vec2(px.x, 0.0));
-  float zr = viewZ(vUv + vec2(px.x, 0.0));
-  float zd = viewZ(vUv - vec2(0.0, px.y));
-  float zu = viewZ(vUv + vec2(0.0, px.y));
-  float dEdge = (abs(zl + zr - 2.0 * z) + abs(zu + zd - 2.0 * z)) / max(z, 0.5);
+  // Depth edges from 1/z, which is linear across any flat surface, so only
+  // silhouettes and creases light up (not floors seen at a grazing angle).
+  float w = 1.0 / max(z, 0.05);
+  float wl = 1.0 / max(viewZ(vUv - vec2(px.x, 0.0)), 0.05);
+  float wr = 1.0 / max(viewZ(vUv + vec2(px.x, 0.0)), 0.05);
+  float wd = 1.0 / max(viewZ(vUv - vec2(0.0, px.y)), 0.05);
+  float wu = 1.0 / max(viewZ(vUv + vec2(0.0, px.y)), 0.05);
+  float dEdge = (abs(wl + wr - 2.0 * w) + abs(wu + wd - 2.0 * w)) * z;
   // Colour edges.
   float ll = luma(texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb);
   float lr = luma(texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb);
   float ld = luma(texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb);
   float lu = luma(texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb);
   float cEdge = length(vec2(lr - ll, lu - ld));
-  float ink = max(smoothstep(0.06, 0.16, dEdge), smoothstep(0.22, 0.45, cEdge) * 0.55);
+  float ink = max(smoothstep(0.015, 0.05, dEdge), smoothstep(0.16, 0.36, cEdge) * 0.65);
   // Lines fade into the distance like an atmospheric painting.
-  ink *= 1.0 - smoothstep(60.0, 420.0, z);
+  ink *= 1.0 - smoothstep(120.0, 650.0, z);
   // Bright neon keeps its glow instead of being inked over.
   ink *= 1.0 - smoothstep(1.2, 2.4, luma(col));
-  vec3 inkColor = vec3(0.045, 0.02, 0.09);
-  gl_FragColor = vec4(mix(col, inkColor, ink * 0.85), 1.0);
+  vec3 inkColor = vec3(0.06, 0.05, 0.12);
+  gl_FragColor = vec4(mix(col, inkColor, ink * 0.92), 1.0);
 }`;
 
 const GRADE_FRAG = `
@@ -114,13 +116,15 @@ vec3 toSRGB(vec3 c) {
 void main() {
   vec3 c = texture2D(tDiffuse, vUv).rgb * exposure;
   c = aces(c);
-  // Anime grade: richer colour, cool violet shadows, warm peach highlights.
+  // Sunny illustration grade: punchy colour, cool blue shadows, warm
+  // sunlit highlights.
+  c = mix(c, c * c * (3.0 - 2.0 * c), 0.35);
   float l = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(vec3(l), c, 1.22);
-  c = mix(c, c * vec3(0.78, 0.82, 1.18) + vec3(0.03, 0.0, 0.06), (1.0 - smoothstep(0.0, 0.45, l)) * 0.6);
-  c = mix(c, c * vec3(1.08, 0.98, 0.86), smoothstep(0.55, 1.0, l) * 0.5);
+  c = mix(vec3(l), c, 1.32);
+  c = mix(c, c * vec3(0.86, 0.94, 1.12) + vec3(0.0, 0.01, 0.03), (1.0 - smoothstep(0.0, 0.4, l)) * 0.55);
+  c = mix(c, c * vec3(1.05, 1.0, 0.92), smoothstep(0.6, 1.0, l) * 0.4);
   // Soft cel bands.
-  c = mix(c, floor(c * bands + 0.5) / bands, 0.28);
+  c = mix(c, floor(c * bands + 0.5) / bands, 0.18);
   // Canvas weave and brush grain.
   vec2 cuv = vUv * vec2(resolution.x / resolution.y, 1.0) * 2.2;
   vec3 canvas = texture2D(tCanvas, cuv).rgb;
@@ -217,7 +221,7 @@ export class PaintPipeline {
           tDiffuse: { value: null },
           tCanvas: { value: this.canvasTex },
           resolution: { value: new THREE.Vector2() },
-          exposure: { value: 1.05 },
+          exposure: { value: 0.9 },
           time: { value: 0 },
           flash: { value: 0 },
           bands: { value: 7 },
@@ -226,7 +230,7 @@ export class PaintPipeline {
         fragmentShader: GRADE_FRAG,
       }),
     );
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 0.9);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.35, 0.4, 1.25);
 
     this.fps = { frames: 0, time: 0, checks: 0 };
     this.setSize(innerWidth, innerHeight);
@@ -243,7 +247,7 @@ export class PaintPipeline {
     this.rtB.setSize(W, H);
     this.bloom.setSize(Math.floor(W / 2), Math.floor(H / 2));
     for (const q of [this.paint, this.ink, this.grade]) q.material.uniforms.resolution.value.set(W, H);
-    this.ink.material.uniforms.lineWidth.value = Math.max(1, H / 900);
+    this.ink.material.uniforms.lineWidth.value = Math.max(1, H / 650);
     this.paint.material.uniforms.stride.value = Math.max(1, H / 760);
     this.size = [w, h];
   }

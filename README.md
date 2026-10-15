@@ -1,16 +1,16 @@
 # THE HUNT
 
-**Three Gates. One Key.** A futuristic 3D browser game inspired by *Ready Player One*, drawn like a cyberpunk anime oil painting: cel-shaded models, a painted sunset sky, ink outlines and brush-stroke post-processing.
+**Three Gates. One Key.** A 3D browser game inspired by *Ready Player One*, drawn like a sunny streetball anime illustration: cel-shaded people and props, a bright painted sky with big clouds, palm trees over a beach city, ink outlines and brush-stroke post-processing.
 
 Players create an avatar, walk the **Gate Hall** in third person and try to clear three Gates. Each Gate gives a key shard. All three shards unlock the **Final Key**. Version 1 has Gate I playable; Gates II and III are sealed.
 
 ## Gate I: The Race
 
-- A 400 m neon hoverway floating above a megacity, 10 runners (real players, with AI runners filling empty lanes).
-- Third person at the start line; the camera drops into **first person automatically** when the countdown runs out.
+- A 400 m running track floating above a beach city, 10 runners (real players, with AI runners filling empty lanes). Every runner is a person with their own look (skin, hair, face, kit), picked from their name.
+- Third person the whole way: a chase camera follows your runner (move the mouse to swing it around; it drifts back behind you).
 - In the lobby, press **Enter** when ready. When every player in the lobby is ready, the race starts in 3 seconds instead of waiting out the timer.
 - **THE CLOCK** runs the 400 m in 38 seconds. If it crosses the line first, everyone loses: *TIME WINS*.
-- Obstacles: rolling energy balls, falling blocks, laser gates, shock and spike floors, pistons and road that cracks and falls away.
+- Obstacles: giant rolling basketballs, falling blocks, laser gates, shock and spike floors, pistons and road that cracks and falls away.
 - Fail a race (knocked out, beaten by THE CLOCK, or leaving) and your account is **locked out of racing for one hour**. You can still watch live races. (The lockout is a setting, `LOCKOUT_MINUTES`; with it off, press **R** to go straight into the next race.)
 - The first players to beat THE CLOCK go on the Scoreboard in the Gate Hall.
 

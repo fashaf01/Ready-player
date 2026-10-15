@@ -1,13 +1,12 @@
-// The race. Third person while waiting at the start; the camera drops into
-// first person on its own during the countdown. Also used for watching
-// other people's races.
+// The race, in third person from the start line to the finish. Also used for
+// watching other people's races.
 
 import * as THREE from 'three';
 import { TRACK, CLOCK, PHYS, laneX, clockSchedule } from '/shared/constants.js';
 import { generateCourse } from '/shared/course.js';
 import { makeRunner, stepRunner, runnerFlags, FLAG } from '/shared/runner.js';
 import { Avatar } from '../gfx/avatar.js';
-import { textPlane, neon, toon, damp, clamp, lerp } from '../gfx/common.js';
+import { textPlane, damp, clamp, lerp } from '../gfx/common.js';
 import { esc } from '../ui.js';
 
 const STEP = 1 / 120;
@@ -34,24 +33,6 @@ export class RaceScene {
     this.sky.rotation.y = Math.PI;
     this.group.add(this.sky);
 
-    // First person arms.
-    this.arms = new THREE.Group();
-    const armGeo = new THREE.CapsuleGeometry(0.05, 0.32, 4, 8);
-    for (const sx of [-1, 1]) {
-      const a = new THREE.Group();
-      const m = new THREE.Mesh(armGeo, toon({ color: 0x1a1d33, metalness: 0.4, roughness: 0.5 }));
-      m.rotation.x = Math.PI / 2;
-      a.add(m);
-      const band = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.018, 0.105), neon('#00e5ff', 0.9, { unique: true }));
-      band.position.z = -0.1;
-      a.add(band);
-      a.position.set(sx * 0.26, -0.3, -0.42);
-      a.userData.sx = sx;
-      a.userData.band = band;
-      this.arms.add(a);
-    }
-    this.arms.visible = false;
-    app.camera.add(this.arms);
     this.group.visible = false;
   }
 
@@ -77,12 +58,11 @@ export class RaceScene {
     this.myReady = false;
     this.readyLanes = new Set();
     this.yaw = 0;
-    this.pitch = -0.04;
-    this.camBlend = 0;
+    this.pitch = 0;
     this.shake = 0;
     this.roll = 0;
     this.fov = 70;
-    this.eyeH = 1.62;
+    this.eyeH = 1.45;
     this.sendTimer = 0;
     this.lastT = null;
     this.edgePending = false;
@@ -107,10 +87,9 @@ export class RaceScene {
 
     if (mode === 'play') {
       const me = app.me;
-      this.myAv = new Avatar({ color: me.color, name: null });
+      this.myAv = new Avatar({ color: me.color, name: null, seed: me.name });
       this.group.add(this.myAv.root);
       this.myAv.root.position.copy(this.lobbyPos);
-      for (const a of this.arms.children) a.userData.band.material.color.set(me.color).multiplyScalar(0.9);
     }
     this.syncRunners(room.runners);
     if (this.status !== 'lobby') this.lineUp();
@@ -127,7 +106,6 @@ export class RaceScene {
     clearInterval(this.keepAlive);
     this.group.visible = false;
     this.app.track.group.visible = false;
-    this.arms.visible = false;
     this.clearAvatars();
     if (this.myAv) {
       this.group.remove(this.myAv.root);
@@ -333,7 +311,6 @@ export class RaceScene {
     app.audio.play('derezz');
     app.ui.center('DEREZZED', 'red', 2600);
     app.ui.sub(app.lockoutMinutes > 0 ? 'Locked out for 1 hour · watching the rest of the race' : 'Watching the rest of the race · press R to race again', 6000);
-    this.arms.visible = false;
   }
 
   stepLocal(t, dt) {
@@ -456,7 +433,7 @@ export class RaceScene {
     // Camera.
     if (this.mode === 'watch' || this.status === 'dead' || (this.status === 'over' && (!this.R || this.R.dead))) this.updateChaseCam(dt, input);
     else if (this.status === 'lobby') this.updateLobby(dt, input);
-    else this.updatePlayCam(dt, input, t);
+    else this.updatePlayCam(dt, input);
 
     // World.
     const camZ = app.camera.position.z;
@@ -583,79 +560,66 @@ export class RaceScene {
     }
   }
 
-  // Third person behind the runner during the countdown, then first person.
-  updatePlayCam(dt, input, t) {
+  // Third person behind the runner for the whole race. The mouse swings the
+  // camera around a little; it drifts back behind the runner by itself.
+  updatePlayCam(dt, input) {
     const app = this.app;
     const cam = app.camera;
     const R = this.R;
     if (!R) return;
     const [mx, my] = input.takeMouse();
-    const fps = this.status === 'running' || this.status === 'finishing' || this.status === 'countdown';
-
-    // Blend from TPS to FPS over the countdown (t: -5 → -1.2).
-    const blendTarget = this.status === 'won' || this.status === 'over' ? 0 : clamp((t + 4.2) / 3, 0, 1);
-    this.camBlend = this.status === 'won' || this.status === 'over' ? damp(this.camBlend, 0, 2, dt) : Math.max(this.camBlend, blendTarget);
-    const b = this.camBlend * this.camBlend * (3 - 2 * this.camBlend);
-
-    if (fps && b > 0.5) {
-      this.yaw = clamp(this.yaw - mx * 0.0022, -1.9, 1.9);
-      this.pitch = clamp(this.pitch - my * 0.0019, -1.2, 1.0);
-    }
-    if (!input.locked && this.status === 'running') {
-      this.yaw = damp(this.yaw, 0, 2, dt);
+    const live = this.status === 'running' || this.status === 'finishing' || this.status === 'countdown';
+    if (live && (mx || my)) {
+      this.yaw = clamp(this.yaw - mx * 0.0022, -1.1, 1.1);
+      this.pitch = clamp(this.pitch - my * 0.0019, -0.45, 0.35);
+      this.lookIdle = 0;
+    } else {
+      this.lookIdle = (this.lookIdle || 0) + dt;
+      if (this.lookIdle > 0.8 || !input.locked) {
+        this.yaw = damp(this.yaw, 0, 1.6, dt);
+        this.pitch = damp(this.pitch, 0, 1.2, dt);
+      }
     }
 
-    const eyeTarget = R.down > 0 ? 0.45 : R.slide > 0 ? 0.78 : 1.62;
-    this.eyeH = damp(this.eyeH, eyeTarget, 14, dt);
-    const moving = R.onGround && R.vz > 0.5 && R.down <= 0;
-    this.bob = (this.bob || 0) + dt * (R.skates ? 3 : R.vz * 1.25);
-    const bobAmp = moving && !R.skates ? Math.min(1, R.vz / 7) : 0;
     this.shake = Math.max(0, this.shake - dt);
-    const sh = this.shake * this.shake * 0.25;
-    const head = new THREE.Vector3(
-      R.x + Math.cos(this.bob) * 0.025 * bobAmp + (Math.random() - 0.5) * sh,
-      R.y + this.eyeH + Math.abs(Math.sin(this.bob)) * 0.05 * bobAmp + (Math.random() - 0.5) * sh,
-      R.z,
-    );
-    const look = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
-
-    // Third person spot behind.
-    const tps = new THREE.Vector3(R.x, R.y + 2.6, R.z - 6);
-    const tpsLook = new THREE.Vector3(R.x, R.y + 1.4, R.z + 6);
+    const sh = this.shake * this.shake * 0.3;
+    const lowH = R.down > 0 ? 0.6 : R.slide > 0 ? 0.9 : 1.45;
+    this.eyeH = damp(this.eyeH, lowH, 8, dt);
+    const target = new THREE.Vector3(R.x, R.y + this.eyeH, R.z + 1.5);
+    const p = -0.24 + this.pitch;
+    const dir = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(p), Math.sin(p), Math.cos(this.yaw) * Math.cos(p));
+    const dist = R.skates ? 5.6 : 4.8;
+    const want = target.clone().addScaledVector(dir, -dist);
     if (this.status === 'won') {
       const a = (performance.now() - this.finishedAt) / 1000;
-      tps.set(R.x + Math.sin(a * 0.4) * 7, R.y + 3, R.z + Math.cos(a * 0.4) * 7);
-      tpsLook.set(R.x, R.y + 1.2, R.z);
+      want.set(R.x + Math.sin(a * 0.4) * 7, R.y + 3, R.z + Math.cos(a * 0.4) * 7);
+      target.set(R.x, R.y + 1.2, R.z);
     }
-    const pos = tps.clone().lerp(head, b);
-    const tgt = tpsLook.clone().lerp(head.clone().add(look), b);
-    cam.position.copy(pos);
+    // Under the track (the ledge, or a fall): keep the camera out of the deck.
+    if (R.overEdge && want.y < 0.4) {
+      const side = Math.sign(R.x) || 1;
+      want.x = side * Math.max(Math.abs(want.x), TRACK.EDGE_X + 2.2);
+      target.x = side * Math.max(Math.abs(target.x), TRACK.EDGE_X - 1);
+    }
+    if (this.camPos.distanceToSquared(want) > 400) this.camPos.copy(want);
+    else this.camPos.lerp(want, 1 - Math.exp(-dt * 12));
+    cam.position.copy(this.camPos);
+    cam.position.x += (Math.random() - 0.5) * sh;
+    cam.position.y += (Math.random() - 0.5) * sh;
     cam.up.set(0, 1, 0);
-    cam.lookAt(tgt);
-    const wantRoll = R.down > 0 ? 0.35 : 0;
+    cam.lookAt(target.clone().addScaledVector(dir, 4));
+    const wantRoll = R.down > 0 ? 0.12 : 0;
     this.roll = damp(this.roll, wantRoll, 6, dt);
     if (this.roll) cam.rotateZ(this.roll);
 
-    const fovTarget = R.skates ? 96 : 72 + Math.min(12, Math.max(0, R.vz - 3) * 1.6);
-    this.setFov(lerp(68, fovTarget, b), dt);
+    this.setFov(R.skates ? 84 : 66 + Math.min(10, Math.max(0, R.vz - 3) * 1.4), dt);
 
-    // Body vs arms.
     if (this.myAv) {
-      this.myAv.root.visible = b < 0.85;
+      this.myAv.root.visible = !R.dead;
       this.myAv.root.position.set(R.x, R.y, R.z);
       this.myAv.root.rotation.y = 0;
       this.myAv.showSkates(R.skates);
       this.myAv.update(dt, { speed: R.vz, air: !R.onGround, slide: R.slide > 0, down: R.down > 0, moving: R.vz > 0.4, skating: R.skates });
-    }
-    this.arms.visible = b >= 0.85 && R.down <= 0 && !R.dead && this.status !== 'won';
-    if (this.arms.visible) {
-      const sw = Math.sin(this.bob);
-      for (const arm of this.arms.children) {
-        const sx = arm.userData.sx;
-        const amp = R.skates ? 0.05 : 0.12 * Math.min(1, R.vz / 6);
-        arm.position.set(sx * 0.3, -0.38 + sx * sw * amp * 0.4, -0.46 + sx * sw * amp);
-        arm.rotation.x = sx * sw * amp * 2;
-      }
     }
 
     app.ui.speedLines(R.skates && R.vz > 8 ? 1 : R.vz > 8.8 ? 0.35 : 0);
@@ -666,7 +630,6 @@ export class RaceScene {
     const app = this.app;
     const cam = app.camera;
     input.takeMouse();
-    this.arms.visible = false;
     if (this.myAv && this.status === 'dead') this.myAv.root.visible = false;
     const visible = [...this.avatars.entries()].filter(([, o]) => o.visible && !o.dead && o.av.root.visible);
     const sinceDeath = (performance.now() - this.deadAt) / 1000;
